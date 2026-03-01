@@ -92,7 +92,18 @@ pub fn render_satellite_info(app: &mut OrbitSenseApp, ctx: &egui::Context) {
         .show(ctx, |ui| {
             ui.heading("Spacecraft Details");
             ui.label(format!("NORAD ID: {}", sat.elements.norad_id));
+            if let Some(id) = &sat.elements.international_designator {
+                ui.label(format!("Int. Designator: {}", id));
+            }
+            ui.label(format!("Epoch Date: {}", sat.elements.datetime.format("%Y-%m-%d %H:%M:%S UTC")));
             ui.label(format!("Inclination: {:.4}°", sat.elements.inclination));
+            ui.label(format!("Eccentricity: {:.6}", sat.elements.eccentricity));
+            ui.label(format!("RA of Asc Node: {:.4}°", sat.elements.right_ascension));
+            ui.label(format!("Arg of Perigee: {:.4}°", sat.elements.argument_of_perigee));
+            ui.label(format!("Mean Anomaly: {:.4}°", sat.elements.mean_anomaly));
+            ui.label(format!("Mean Motion: {:.4} rev/day", sat.elements.mean_motion));
+            ui.label(format!("Revolution # (Epoch): {}", sat.elements.revolution_number));
+            ui.label(format!("BSTAR Drag Term: {:.6}", sat.elements.drag_term));
             
             ui.separator();
             ui.heading("Next Pass Prediction");
