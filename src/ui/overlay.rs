@@ -19,7 +19,51 @@ pub fn render_map_controls(app: &mut OrbitSenseApp, ctx: &egui::Context) {
         .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-10.0, -10.0))
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.label("3D Controls coming...");
+                if app.render_mode == crate::app::RenderMode::Map2D {
+                    if ui
+                        .add_sized([30.0, 30.0], egui::Button::new("➕"))
+                        .on_hover_text("Zoom In")
+                        .clicked()
+                    {
+                        let _ = app.map_memory.zoom_in();
+                    }
+                    if ui
+                        .add_sized([30.0, 30.0], egui::Button::new("➖"))
+                        .on_hover_text("Zoom Out")
+                        .clicked()
+                    {
+                        let _ = app.map_memory.zoom_out();
+                    }
+                    if ui
+                        .add_sized([30.0, 30.0], egui::Button::new("🌐"))
+                        .on_hover_text("Max Zoomout")
+                        .clicked()
+                    {
+                        let _ = app.map_memory.set_zoom(2.5);
+                    }
+                    if ui
+                        .add_sized([30.0, 30.0], egui::Button::new("🗺"))
+                        .on_hover_text("Fit to Window")
+                        .clicked()
+                    {
+                        app.map_memory.center_at(walkers::Position::new(0.0, 0.0));
+                        let _ = app.map_memory.set_zoom(2.5);
+                    }
+                    if ui
+                        .add_sized([30.0, 30.0], egui::Button::new("📍"))
+                        .on_hover_text("Center on Observer")
+                        .clicked()
+                    {
+                        if let Some(obs) = &app.observer {
+                            app.map_memory
+                                .center_at(walkers::Position::new(obs.lon_deg, obs.lat_deg));
+                        } else {
+                            app.map_memory.center_at(walkers::Position::new(0.0, 20.0));
+                        }
+                    }
+                } else {
+                    ui.label("3D Space Controls");
+                }
 
                 let lock_icon = if app.camera_locked { "🔒" } else { "🔓" };
                 let lock_hover = if app.camera_locked {

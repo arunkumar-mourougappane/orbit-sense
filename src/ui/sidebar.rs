@@ -20,7 +20,7 @@ pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
             let query = app.location_query.clone();
             let tx = app.tx.clone();
 
-            tokio::spawn(async move {
+            app.rt.spawn(async move {
                 let loc_res = Location::from_query(&query).await;
                 let _ = tx.send(AppMessage::LocationGeocoded(loc_res)).await;
             });
@@ -109,7 +109,7 @@ pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
             let tx = app.tx.clone();
             let category = app.satellite_category;
 
-            tokio::spawn(async move {
+            app.rt.spawn(async move {
                 let res = fetch_active_satellites(category)
                     .await
                     .map_err(|e| e.to_string());

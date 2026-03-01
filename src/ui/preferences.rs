@@ -18,6 +18,44 @@ pub fn render_preferences_window(app: &mut OrbitSenseApp, ctx: &egui::Context) {
         .collapsible(false)
         .show(ctx, |ui| {
             ui.heading("Display Options");
+
+            ui.horizontal(|ui| {
+                ui.label("Render Mode:");
+                ui.radio_value(
+                    &mut app.render_mode,
+                    crate::app::RenderMode::Map2D,
+                    "2D Slippy Map",
+                );
+                ui.radio_value(
+                    &mut app.render_mode,
+                    crate::app::RenderMode::Globe3D,
+                    "3D Globe (Macroquad)",
+                );
+            });
+
+            if app.render_mode == crate::app::RenderMode::Map2D {
+                ui.horizontal(|ui| {
+                    ui.label("Map Theme:");
+                    egui::ComboBox::from_id_salt("map_style")
+                        .selected_text(match app.map_style {
+                            crate::app::MapStyle::OpenStreetMap => "Light (OSM)",
+                            crate::app::MapStyle::CartoDark => "Dark (CartoDB)",
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut app.map_style,
+                                crate::app::MapStyle::OpenStreetMap,
+                                "Light (OSM)",
+                            );
+                            ui.selectable_value(
+                                &mut app.map_style,
+                                crate::app::MapStyle::CartoDark,
+                                "Dark (CartoDB)",
+                            );
+                        });
+                });
+            }
+
             ui.checkbox(&mut app.show_orbital_trail, "Show Orbital Trail");
 
             ui.separator();

@@ -26,7 +26,7 @@ async fn main() {
     // inherent async executor.
     let rt = Arc::new(Runtime::new().unwrap());
 
-    let mut app = app::OrbitSenseApp::new(rt.clone());
+    let mut app: Option<app::OrbitSenseApp> = None;
 
     let mut camera = Camera3D {
         position: vec3(0., 0., 3.),
@@ -41,24 +41,34 @@ async fn main() {
     loop {
         clear_background(BLACK);
 
-        // Update 3D Camera Controls (simple orbital drag)
-        if !wants_pointer && is_mouse_button_down(MouseButton::Left) {
-            let _delta = mouse_delta_position();
-            // Basic rotation logic here later
+        if let Some(app_ref) = &app {
+            if app_ref.render_mode == orbit_sense::app::RenderMode::Globe3D {
+                // Update 3D Camera Controls (simple orbital drag)
+                if !wants_pointer && is_mouse_button_down(MouseButton::Left) {
+                    let _delta = mouse_delta_position();
+                    // Basic rotation logic here later
+                }
+
+                set_camera(&camera);
+
+                // Render globe and satellites
+                orbit_sense::ui::map::render_macroquad_3d(app_ref, &earth_tex);
+
+                // Reset camera to standard 2D
+                set_default_camera();
+            }
         }
-
-        set_camera(&camera);
-
-        // Render globe and satellites
-        orbit_sense::ui::map::render_macroquad_3d(&app, &earth_tex);
-
-        // Reset camera to standard 2D
-        set_default_camera();
 
         // Draw Egui UI overlays
         egui_macroquad::ui(|egui_ctx| {
-            app.update(egui_ctx);
-            wants_pointer = egui_ctx.wants_pointer_input();
+            if app.is_none() {
+                app = Some(app::OrbitSenseApp::new(rt.clone(), egui_ctx.clone()));
+            }
+
+            if let Some(app_ref) = &mut app {
+                app_ref.update(egui_ctx);
+                wants_pointer = egui_ctx.wants_pointer_input();
+            }
         });
 
         // Physically draw Egui UI overlays on top

@@ -10,6 +10,8 @@ use crate::location::Location;
 use crate::satellites::{SpaceObject, fetch_active_satellites};
 
 /// Messages passed from background asynchronous tasks back to the UI thread.
+use walkers::{HttpOptions, HttpTiles, MapMemory, Position};
+
 pub enum AppMessage {
     /// Received a payload containing the successfully parsed Celestrak dataset, or an error.
     SatellitesLoaded(Result<HashMap<String, SpaceObject>, String>),
@@ -17,6 +19,40 @@ pub enum AppMessage {
     LocationGeocoded(Result<Location, String>),
     /// Emitted after `predict_next_pass` completes evaluating the upcoming 48 hours.
     PassPredicted(Vec<(chrono::DateTime<chrono::Utc>, f64)>),
+}
+
+#[derive(PartialEq, Clone)]
+pub enum MapStyle {
+    OpenStreetMap,
+    CartoDark,
+}
+
+#[derive(PartialEq, Clone)]
+pub enum RenderMode {
+    Map2D,
+    Globe3D,
+}
+
+/// Custom tile provider using free CartoDB Voyager endpoints.
+/// See: https://github.com/CartoDB/basemap-styles
+pub struct CartoDark;
+
+impl walkers::sources::TileSource for CartoDark {
+    fn tile_url(&self, tile_id: walkers::TileId) -> String {
+        format!(
+            "https://basemaps.cartocdn.com/rastertiles/dark_all/{}/{}/{}.png",
+            tile_id.zoom, tile_id.x, tile_id.y
+        )
+    }
+
+    fn attribution(&self) -> walkers::sources::Attribution {
+        walkers::sources::Attribution {
+            text: "© OpenStreetMap contributors © CARTO",
+            url: "https://carto.com/attributions",
+            logo_light: None,
+            logo_dark: None,
+        }
+    }
 }
 
 /// The core application state running on the `eframe` GUI loop.
@@ -40,6 +76,11 @@ pub struct OrbitSenseApp {
     pub show_orbital_trail: bool,
     pub camera_locked: bool,
     pub pass_threshold_km: f64,
+    pub map_style: MapStyle,
+    pub render_mode: RenderMode,
+    pub map_memory: MapMemory,
+    pub tiles_osm: HttpTiles,
+    pub tiles_carto: HttpTiles,
     pub rt: Arc<Runtime>,
 
     // Async communications
@@ -55,8 +96,27 @@ pub struct OrbitSenseApp {
 impl OrbitSenseApp {
     /// Constructs the initial state of the application.
     /// Injects `reqwest` headers for Celestrak mapping and pulls initial cache.
-    pub fn new(rt: Arc<Runtime>) -> Self {
+    pub fn new(rt: Arc<Runtime>, ctx: egui::Context) -> Self {
         let (tx, rx) = mpsc::channel(100);
+
+        // Setup walkers tiles manager
+        let options = HttpOptions {
+            user_agent: Some(reqwest::header::HeaderValue::from_static(
+                "orbit-sense/0.1 (amouroug@gemini.local)",
+            )),
+            ..Default::default()
+        };
+
+        let options2 = HttpOptions {
+            user_agent: Some(reqwest::header::HeaderValue::from_static(
+                "orbit-sense/0.1 (amouroug@gemini.local)",
+            )),
+            ..Default::default()
+        };
+
+        let tiles_osm =
+            HttpTiles::with_options(walkers::sources::OpenStreetMap, options, ctx.clone());
+        let tiles_carto = HttpTiles::with_options(CartoDark, options2, ctx.clone());
 
         let mut app = Self {
             satellites: HashMap::new(),
@@ -73,6 +133,11 @@ impl OrbitSenseApp {
             show_orbital_trail: true,
             camera_locked: false,
             pass_threshold_km: crate::constants::DEFAULT_PASS_THRESHOLD_KM,
+            map_style: MapStyle::CartoDark,
+            render_mode: RenderMode::Map2D,
+            map_memory: MapMemory::default(),
+            tiles_osm,
+            tiles_carto,
             rt,
             tx,
             rx,
@@ -93,7 +158,7 @@ impl OrbitSenseApp {
         // Silent (or otherwise) background refresh of TLEs so they are current.
         let tx = app.tx.clone();
         let category = app.satellite_category;
-        tokio::spawn(async move {
+        app.rt.spawn(async move {
             let res = fetch_active_satellites(category)
                 .await
                 .map_err(|e| e.to_string());
@@ -194,9 +259,15 @@ impl OrbitSenseApp {
         });
 
         egui::CentralPanel::default()
-            .frame(egui::Frame::central_panel(&ctx.style()).inner_margin(0.0))
+            .frame(if self.render_mode == RenderMode::Globe3D {
+                egui::Frame::NONE.fill(egui::Color32::TRANSPARENT)
+            } else {
+                egui::Frame::central_panel(&ctx.style()).inner_margin(0.0)
+            })
             .show(ctx, |ui| {
-                // UI over our 3D globe later
+                if self.render_mode == RenderMode::Map2D {
+                    crate::ui::map::render_walkers_2d(self, ui);
+                }
             });
 
         crate::ui::render_map_controls(self, ctx);
