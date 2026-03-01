@@ -118,4 +118,7 @@ pub fn render_map(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
     });
 
     let _response = ui.add(map);
+
+    // Request continuous repaint for real-time satellite map updates
+    ui.ctx().request_repaint();
 }
