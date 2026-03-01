@@ -4,7 +4,7 @@ use tokio::sync::mpsc::{self, Receiver, Sender};
 use walkers::{HttpOptions, HttpTiles, MapMemory, Position};
 
 use crate::location::Location;
-use crate::satellites::SpaceObject;
+use crate::satellites::{SpaceObject, fetch_active_satellites};
 
 // Messages from async tasks back to the UI thread
 pub enum AppMessage {
@@ -21,8 +21,8 @@ pub struct OrbitSenseApp {
     // Observer state
     pub observer: Option<Location>,
     pub location_query: String,
-
     // UI state
+    pub show_satellite_info: bool,
     pub map_memory: MapMemory,
     pub tiles_manager: HttpTiles,
 
@@ -63,6 +63,7 @@ impl OrbitSenseApp {
             search_query: String::new(),
             observer: None,
             location_query: String::new(),
+            show_satellite_info: false,
             map_memory: MapMemory::default(),
             tiles_manager,
             tx,
@@ -86,7 +87,24 @@ impl OrbitSenseApp {
             if let Some(query) = storage.get_string("last_location_query") {
                 app.location_query = query;
             }
+            if let Some(sats_json) = storage.get_string("satellites_cache") {
+                if let Ok(sats) = serde_json::from_str::<HashMap<String, SpaceObject>>(&sats_json) {
+                    app.satellites = sats;
+                }
+            }
         }
+
+        // If no satellites were cached yet, we show the loading spinner immediately.
+        if app.satellites.is_empty() {
+            app.fetch_in_progress = true;
+        }
+
+        // Silent (or otherwise) background refresh of TLEs so they are current.
+        let tx = app.tx.clone();
+        tokio::spawn(async move {
+            let res = fetch_active_satellites().await.map_err(|e| e.to_string());
+            let _ = tx.send(AppMessage::SatellitesLoaded(res)).await;
+        });
 
         if !centered {
             // Initial map view: Center roughly over the Atlantic
@@ -105,6 +123,12 @@ impl eframe::App for OrbitSenseApp {
             }
         }
         storage.set_string("last_location_query", self.location_query.clone());
+
+        if !self.satellites.is_empty() {
+            if let Ok(sats_json) = serde_json::to_string(&self.satellites) {
+                storage.set_string("satellites_cache", sats_json);
+            }
+        }
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -154,5 +178,7 @@ impl eframe::App for OrbitSenseApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             crate::ui::render_map(self, ui);
         });
+
+        crate::ui::render_satellite_info(self, ctx);
     }
 }

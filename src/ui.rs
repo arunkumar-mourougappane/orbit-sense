@@ -217,32 +217,133 @@ pub fn render_map(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
         .collapsible(false)
         .resizable(false)
         .title_bar(false) // Hides the title bar to save space
-        .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-10.0, 10.0))
+        .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-10.0, -10.0))
         .show(ui.ctx(), |ui| {
             ui.horizontal(|ui| {
-                if ui.button("➕ Zoom In").clicked() {
+                if ui
+                    .add_sized([30.0, 30.0], egui::Button::new("➕"))
+                    .on_hover_text("Zoom In")
+                    .clicked()
+                {
                     let _ = app.map_memory.zoom_in();
                 }
-                if ui.button("➖ Zoom Out").clicked() {
+                if ui
+                    .add_sized([30.0, 30.0], egui::Button::new("➖"))
+                    .on_hover_text("Zoom Out")
+                    .clicked()
+                {
                     let _ = app.map_memory.zoom_out();
                 }
-            });
-
-            ui.separator();
-
-            if ui
-                .add_sized(
-                    [ui.available_width(), 0.0],
-                    egui::Button::new("📍 Center on Observer"),
-                )
-                .clicked()
-            {
-                if let Some(obs) = &app.observer {
-                    app.map_memory
-                        .center_at(Position::new(obs.lon_deg, obs.lat_deg));
-                } else {
-                    app.map_memory.center_at(Position::new(0.0, 20.0)); // Default rough Atlantic coords
+                if ui
+                    .add_sized([30.0, 30.0], egui::Button::new("📍"))
+                    .on_hover_text("Center on Observer")
+                    .clicked()
+                {
+                    if let Some(obs) = &app.observer {
+                        app.map_memory
+                            .center_at(Position::new(obs.lon_deg, obs.lat_deg));
+                    } else {
+                        app.map_memory.center_at(Position::new(0.0, 20.0)); // Default rough Atlantic coords
+                    }
                 }
+                if ui
+                    .add_sized([30.0, 30.0], egui::Button::new("ℹ"))
+                    .on_hover_text("Satellite Info")
+                    .clicked()
+                {
+                    app.show_satellite_info = !app.show_satellite_info;
+                }
+            });
+        });
+}
+
+fn haversine_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+    let r = 6371.0; // Earth radius in km
+    let dlat = (lat2 - lat1).to_radians();
+    let dlon = (lon2 - lon1).to_radians();
+    let a = (dlat / 2.0).sin().powi(2)
+        + lat1.to_radians().cos() * lat2.to_radians().cos() * (dlon / 2.0).sin().powi(2);
+    let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
+    r * c
+}
+
+pub fn render_satellite_info(app: &mut OrbitSenseApp, ctx: &egui::Context) {
+    if !app.show_satellite_info {
+        return;
+    }
+
+    let sat_name = match &app.selected_satellite {
+        Some(name) => name,
+        None => return,
+    };
+
+    let sat = match app.satellites.get(sat_name) {
+        Some(s) => s,
+        None => return,
+    };
+
+    let mut open = app.show_satellite_info;
+
+    egui::Window::new(format!("ℹ {}", sat_name))
+        .open(&mut open)
+        .resizable(false)
+        .collapsible(false)
+        .show(ctx, |ui| {
+            // Some basic elements since direct struct fields might be private or complex, 
+            // but we know SGP4 has inclination, etc. We'll stick to what we know is public or safe.
+            ui.heading("Spacecraft Details");
+            ui.label(format!("NORAD ID: {}", sat.elements.norad_id));
+            ui.label(format!("Inclination: {:.4}°", sat.elements.inclination));
+            
+            ui.separator();
+            ui.heading("Next Pass Prediction");
+
+            if let Some(obs) = &app.observer {
+                let mut next_pass = None;
+                let now = chrono::Utc::now();
+
+                // Scan the next 24 hours (1440 minutes)
+                for min in 1..=1440 {
+                    let future_t = now + chrono::Duration::minutes(min);
+                    if let Some(pass_obs) = calculate_observation(
+                        &sat.elements,
+                        &sat.constants,
+                        &Location {
+                            name: "Dummy".to_string(),
+                            lat_deg: 0.0,
+                            lon_deg: 0.0,
+                            alt_m: 0.0,
+                        },
+                        future_t,
+                    ) {
+                        // calculate_observation returns lat/lon in elevation/azimuth properties
+                        let dist = haversine_distance(
+                            obs.lat_deg,
+                            obs.lon_deg,
+                            pass_obs.elevation_deg,
+                            pass_obs.azimuth_deg,
+                        );
+
+                        // If the satellite's ground footprint is within 2000km, it's roughly "overhead"
+                        if dist < 2000.0 {
+                            next_pass = Some((future_t, dist));
+                            break; // Stop at the very first pass!
+                        }
+                    }
+                }
+
+                if let Some((time, dist)) = next_pass {
+                    // Convert to local time
+                    let local_time: chrono::DateTime<chrono::Local> = time.into();
+                    ui.label(format!("Starts: {}", local_time.format("%Y-%m-%d %H:%M:%S")));
+                    ui.label(format!("Distance (Ground): {:.0} km", dist));
+                } else {
+                    ui.label("No passes over this location in the next 24 hours.");
+                }
+            } else {
+                ui.label("Please search and set an Observer Location in the sidebar first to predict passes.");
             }
         });
+
+    app.show_satellite_info = open;
 }

@@ -1,9 +1,11 @@
+use serde::{Deserialize, Serialize};
 use sgp4::{Constants, Elements};
 use std::collections::HashMap;
 
 /// A space object tracking record.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SpaceObject {
+    #[allow(dead_code)]
     pub name: String,
     pub elements: Elements,
     pub constants: Constants,

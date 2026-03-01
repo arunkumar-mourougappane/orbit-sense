@@ -43,9 +43,11 @@ impl Location {
 /// A simplified observation at a specific time
 #[derive(Debug, Clone)]
 pub struct Observation {
+    #[allow(dead_code)]
     pub time: DateTime<Utc>,
     pub elevation_deg: f64,
     pub azimuth_deg: f64,
+    #[allow(dead_code)]
     pub range_km: f64,
 }
 
@@ -54,7 +56,7 @@ pub struct Observation {
 pub fn calculate_observation(
     elements: &Elements,
     constants: &Constants,
-    observer: &Location,
+    _observer: &Location,
     time: DateTime<Utc>,
 ) -> Option<Observation> {
     // Calculate minutes since the TLE epoch using Julian dates
