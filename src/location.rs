@@ -54,17 +54,22 @@ pub fn haversine_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     r * c
 }
 
-/// Asynchronously predicts the next time the given satellite will pass within
-/// the `threshold_km` distance of the provided `obs` Location over the next 24 hours.
+/// Asynchronously predicts all times the given satellite will pass within
+/// the `threshold_km` distance of the provided `obs` Location over the next 48 hours.
 pub async fn predict_next_pass(
     sat: crate::satellites::SpaceObject,
     obs: Location,
     threshold_km: f64,
-) -> Option<(DateTime<Utc>, f64)> {
+) -> Vec<(DateTime<Utc>, f64)> {
     tokio::task::spawn_blocking(move || {
-        let mut next_pass = None;
+        let mut passes = Vec::new();
         let now = Utc::now();
-        for min in 1..=crate::constants::PASS_SEARCH_MINUTES {
+        let mut in_pass = false;
+        let mut pass_best_dist = f64::MAX;
+        let mut pass_best_time = now;
+
+        // Search next 48 hours (48 * 60 = 2880 minutes)
+        for min in 1..=2880 {
             let future_t = now + chrono::Duration::minutes(min);
             if let Some(pass_obs) = calculate_observation(
                 &sat.elements,
@@ -85,15 +90,27 @@ pub async fn predict_next_pass(
                 );
 
                 if dist < threshold_km {
-                    next_pass = Some((future_t, dist));
-                    break;
+                    in_pass = true;
+                    if dist < pass_best_dist {
+                        pass_best_dist = dist;
+                        pass_best_time = future_t;
+                    }
+                } else if in_pass {
+                    passes.push((pass_best_time, pass_best_dist));
+                    in_pass = false;
+                    pass_best_dist = f64::MAX;
                 }
             }
         }
-        next_pass
+
+        if in_pass {
+            passes.push((pass_best_time, pass_best_dist));
+        }
+
+        passes
     })
     .await
-    .unwrap_or(None)
+    .unwrap_or_default()
 }
 
 /// A simplified observation at a specific time

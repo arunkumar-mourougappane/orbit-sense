@@ -142,20 +142,32 @@ pub fn render_satellite_info(app: &mut OrbitSenseApp, ctx: &egui::Context) {
             ui.label(format!("BSTAR Drag Term: {:.6}", sat.elements.drag_term));
             
             ui.separator();
-            ui.heading("Next Pass Prediction");
+            ui.heading("Upcoming Passes (48h)");
 
             if app.observer.is_some() {
-                if let Some((time, dist)) = app.last_predicted_pass {
-                    let local_time: chrono::DateTime<chrono::Local> = time.into();
-                    ui.label(format!("Starts: {}", local_time.format("%Y-%m-%d %H:%M:%S")));
-                    ui.label(format!("Distance (Ground): {:.0} km", dist));
+                if !app.last_predicted_passes.is_empty() {
+                    egui::ScrollArea::vertical().max_height(150.0).show(ui, |ui| {
+                        for (time, dist) in &app.last_predicted_passes {
+                            let local_time: chrono::DateTime<chrono::Local> = (*time).into();
+                            ui.label(format!("Starts: {}", local_time.format("%Y-%m-%d %H:%M:%S")));
+                            
+                            // Visual color hint for direct vs low horizon passes
+                            let color = if *dist < app.pass_threshold_km / 2.0 {
+                                egui::Color32::from_rgb(100, 255, 100) // Direct/Green
+                            } else {
+                                egui::Color32::from_rgb(200, 200, 200) // Lower/Gray
+                            };
+                            ui.colored_label(color, format!("Distance (Ground): {:.0} km", dist));
+                            ui.separator();
+                        }
+                    });
                 } else if app.is_predicting_pass {
                     ui.horizontal(|ui| {
                         ui.spinner();
                         ui.label("Calculating...");
                     });
                 } else {
-                    ui.label("No passes over this location in the next 24 hours.");
+                    ui.label("No passes over this location in the next 48 hours.");
                 }
             } else {
                 ui.label("Please search and set an Observer Location in the sidebar first to predict passes.");

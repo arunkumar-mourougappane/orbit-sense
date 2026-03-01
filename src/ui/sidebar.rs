@@ -42,12 +42,77 @@ pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
 
     ui.group(|ui| {
         ui.label("Satellites");
-        if ui.button("Refresh TLEs").clicked() && !app.fetch_in_progress {
+
+        let mut category_changed = false;
+        egui::ComboBox::from_id_salt("satellite_category")
+            .selected_text(app.satellite_category.name())
+            .show_ui(ui, |ui| {
+                if ui
+                    .selectable_value(
+                        &mut app.satellite_category,
+                        crate::satellites::SatelliteCategory::Visual,
+                        "Visual (100 Brightest)",
+                    )
+                    .clicked()
+                {
+                    category_changed = true;
+                }
+                if ui
+                    .selectable_value(
+                        &mut app.satellite_category,
+                        crate::satellites::SatelliteCategory::Starlink,
+                        "Starlink",
+                    )
+                    .clicked()
+                {
+                    category_changed = true;
+                }
+                if ui
+                    .selectable_value(
+                        &mut app.satellite_category,
+                        crate::satellites::SatelliteCategory::Weather,
+                        "Weather",
+                    )
+                    .clicked()
+                {
+                    category_changed = true;
+                }
+                if ui
+                    .selectable_value(
+                        &mut app.satellite_category,
+                        crate::satellites::SatelliteCategory::Gps,
+                        "GPS Operational",
+                    )
+                    .clicked()
+                {
+                    category_changed = true;
+                }
+                if ui
+                    .selectable_value(
+                        &mut app.satellite_category,
+                        crate::satellites::SatelliteCategory::SpaceStations,
+                        "Space Stations",
+                    )
+                    .clicked()
+                {
+                    category_changed = true;
+                }
+            });
+
+        if (ui.button("Refresh TLEs").clicked() || category_changed) && !app.fetch_in_progress {
+            if category_changed {
+                app.satellites.clear();
+                app.filtered_satellites.clear();
+                app.selected_satellite = None;
+            }
             app.fetch_in_progress = true;
             let tx = app.tx.clone();
+            let category = app.satellite_category;
 
             tokio::spawn(async move {
-                let res = fetch_active_satellites().await.map_err(|e| e.to_string());
+                let res = fetch_active_satellites(category)
+                    .await
+                    .map_err(|e| e.to_string());
                 let _ = tx.send(AppMessage::SatellitesLoaded(res)).await;
             });
         }

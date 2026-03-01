@@ -14,8 +14,8 @@ pub enum AppMessage {
     SatellitesLoaded(Result<HashMap<String, SpaceObject>, String>),
     /// Received a parsed lat/lon coordinate from Nominatim, or an error.
     LocationGeocoded(Result<Location, String>),
-    /// Emitted after `predict_next_pass` completes evaluating the upcoming 24 hours.
-    PassPredicted(Option<(chrono::DateTime<chrono::Utc>, f64)>),
+    /// Emitted after `predict_next_pass` completes evaluating the upcoming 48 hours.
+    PassPredicted(Vec<(chrono::DateTime<chrono::Utc>, f64)>),
 }
 
 #[derive(PartialEq, Clone)]
@@ -53,12 +53,13 @@ pub struct OrbitSenseApp {
     pub selected_satellite: Option<String>,
     pub search_query: String,
     pub filtered_satellites: Vec<String>,
+    pub satellite_category: crate::satellites::SatelliteCategory,
     pub last_updated: Option<chrono::DateTime<chrono::Local>>,
 
     // Observer state
     pub observer: Option<Location>,
     pub location_query: String,
-    pub last_predicted_pass: Option<(chrono::DateTime<chrono::Utc>, f64)>,
+    pub last_predicted_passes: Vec<(chrono::DateTime<chrono::Utc>, f64)>,
 
     // UI state
     pub show_satellite_info: bool,
@@ -119,10 +120,11 @@ impl OrbitSenseApp {
             selected_satellite: None,
             search_query: String::new(),
             filtered_satellites: Vec::new(),
+            satellite_category: crate::satellites::SatelliteCategory::Visual,
             last_updated: None,
             observer: None,
             location_query: String::new(),
-            last_predicted_pass: None,
+            last_predicted_passes: Vec::new(),
             show_satellite_info: false,
             preferences_open: false,
             show_orbital_trail: true,
@@ -168,8 +170,11 @@ impl OrbitSenseApp {
 
         // Silent (or otherwise) background refresh of TLEs so they are current.
         let tx = app.tx.clone();
+        let category = app.satellite_category;
         tokio::spawn(async move {
-            let res = fetch_active_satellites().await.map_err(|e| e.to_string());
+            let res = fetch_active_satellites(category)
+                .await
+                .map_err(|e| e.to_string());
             let _ = tx.send(AppMessage::SatellitesLoaded(res)).await;
         });
 
@@ -202,7 +207,7 @@ impl OrbitSenseApp {
     /// Spawns a background `tokio` thread to predict the next overhead pass using `location::predict_next_pass`.
     pub fn trigger_pass_prediction(&mut self) {
         if self.observer.is_none() || self.selected_satellite.is_none() {
-            self.last_predicted_pass = None;
+            self.last_predicted_passes.clear();
             return;
         }
         self.is_predicting_pass = true;
@@ -267,7 +272,7 @@ impl eframe::App for OrbitSenseApp {
                     self.error_msg = Some(e);
                 }
                 AppMessage::PassPredicted(pass) => {
-                    self.last_predicted_pass = pass;
+                    self.last_predicted_passes = pass;
                     self.is_predicting_pass = false;
                 }
             }

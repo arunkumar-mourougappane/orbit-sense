@@ -4,6 +4,41 @@ use serde::{Deserialize, Serialize};
 use sgp4::{Constants, Elements};
 use std::collections::HashMap;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SatelliteCategory {
+    Visual,
+    Starlink,
+    Weather,
+    Gps,
+    SpaceStations,
+}
+
+impl SatelliteCategory {
+    pub fn to_url(&self) -> &'static str {
+        match self {
+            Self::Visual => "https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=tle",
+            Self::Starlink => {
+                "https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle"
+            }
+            Self::Weather => "https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle",
+            Self::Gps => "https://celestrak.org/NORAD/elements/gp.php?GROUP=gps-ops&FORMAT=tle",
+            Self::SpaceStations => {
+                "https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle"
+            }
+        }
+    }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Visual => "Visual (100 Brightest)",
+            Self::Starlink => "Starlink",
+            Self::Weather => "Weather",
+            Self::Gps => "GPS Operational",
+            Self::SpaceStations => "Space Stations",
+        }
+    }
+}
+
 /// A space object tracking record.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SpaceObject {
@@ -34,9 +69,10 @@ impl SpaceObject {
 
 /// Fetch current active satellites from CelesTrak.
 /// Returns a map of Object Name to SpaceObject.
-pub async fn fetch_active_satellites() -> Result<HashMap<String, SpaceObject>, reqwest::Error> {
-    // 100 brightest satellites is a good default dataset that isn't too huge
-    let url = "https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=tle";
+pub async fn fetch_active_satellites(
+    category: SatelliteCategory,
+) -> Result<HashMap<String, SpaceObject>, reqwest::Error> {
+    let url = category.to_url();
     let response = reqwest::get(url).await?.text().await?;
 
     let mut objects = HashMap::new();
