@@ -39,6 +39,12 @@ async fn main() {
     let mut wants_pointer = false;
 
     loop {
+        // Enter the tokio context for the duration of this frame.
+        // This is crucial because `walkers` heavily uses `tokio::spawn` internally to fetch map tiles.
+        // Since macroquad uses its own async executor on the main thread, Tokio tasks will silently
+        // fail/panic unless the Tokio context is actively entered.
+        let _tokio_guard = rt.enter();
+
         clear_background(BLACK);
 
         if let Some(app_ref) = &app {

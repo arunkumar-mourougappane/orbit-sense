@@ -120,6 +120,10 @@ impl OrbitSenseApp {
             HttpTiles::with_options(walkers::sources::OpenStreetMap, options, ctx.clone());
         let tiles_carto = HttpTiles::with_options(CartoDark, options2, ctx.clone());
 
+        let mut initial_map_memory = MapMemory::default();
+        initial_map_memory.center_at(Position::new(0.0, 20.0));
+        let _ = initial_map_memory.set_zoom(2.5);
+
         let mut app = Self {
             satellites: HashMap::new(),
             selected_satellite: None,
@@ -139,7 +143,7 @@ impl OrbitSenseApp {
             swath_opacity: 0.16,
             map_style: MapStyle::CartoDark,
             render_mode: RenderMode::Map2D,
-            map_memory: MapMemory::default(),
+            map_memory: initial_map_memory,
             tiles_osm,
             tiles_carto,
             rt,
