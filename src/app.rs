@@ -27,11 +27,7 @@ pub enum MapStyle {
     CartoDark,
 }
 
-#[derive(PartialEq, Clone)]
-pub enum RenderMode {
-    Map2D,
-    Globe3D,
-}
+// Removed duplicate MapStyle
 
 /// Custom tile provider using free CartoDB Voyager endpoints.
 /// See: https://github.com/CartoDB/basemap-styles
@@ -79,7 +75,6 @@ pub struct OrbitSenseApp {
     pub swath_color: [f32; 3],
     pub swath_opacity: f32,
     pub map_style: MapStyle,
-    pub render_mode: RenderMode,
     pub map_memory: MapMemory,
     pub tiles_osm: HttpTiles,
     pub tiles_carto: HttpTiles,
@@ -98,7 +93,7 @@ pub struct OrbitSenseApp {
 impl OrbitSenseApp {
     /// Constructs the initial state of the application.
     /// Injects `reqwest` headers for Celestrak mapping and pulls initial cache.
-    pub fn new(rt: Arc<Runtime>, ctx: egui::Context) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let (tx, rx) = mpsc::channel(100);
 
         // Setup walkers tiles manager
@@ -116,9 +111,12 @@ impl OrbitSenseApp {
             ..Default::default()
         };
 
-        let tiles_osm =
-            HttpTiles::with_options(walkers::sources::OpenStreetMap, options, ctx.clone());
-        let tiles_carto = HttpTiles::with_options(CartoDark, options2, ctx.clone());
+        let tiles_osm = HttpTiles::with_options(
+            walkers::sources::OpenStreetMap,
+            options,
+            cc.egui_ctx.clone(),
+        );
+        let tiles_carto = HttpTiles::with_options(CartoDark, options2, cc.egui_ctx.clone());
 
         let mut initial_map_memory = MapMemory::default();
         initial_map_memory.center_at(Position::new(0.0, 20.0));
@@ -142,11 +140,10 @@ impl OrbitSenseApp {
             swath_color: [0.78, 0.78, 0.78],
             swath_opacity: 0.16,
             map_style: MapStyle::CartoDark,
-            render_mode: RenderMode::Map2D,
             map_memory: initial_map_memory,
             tiles_osm,
             tiles_carto,
-            rt,
+            rt: Arc::new(Runtime::new().unwrap()),
             tx,
             rx,
             fetch_in_progress: false,
@@ -216,8 +213,10 @@ impl OrbitSenseApp {
             }
         });
     }
+}
 
-    pub fn update(&mut self, ctx: &egui::Context) {
+impl eframe::App for OrbitSenseApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Process messages from async tasks
         while let Ok(msg) = self.rx.try_recv() {
             match msg {
@@ -267,15 +266,9 @@ impl OrbitSenseApp {
         });
 
         egui::CentralPanel::default()
-            .frame(if self.render_mode == RenderMode::Globe3D {
-                egui::Frame::NONE.fill(egui::Color32::TRANSPARENT)
-            } else {
-                egui::Frame::central_panel(&ctx.style()).inner_margin(0.0)
-            })
+            .frame(egui::Frame::central_panel(&ctx.style()).inner_margin(0.0))
             .show(ctx, |ui| {
-                if self.render_mode == RenderMode::Map2D {
-                    crate::ui::map::render_walkers_2d(self, ui);
-                }
+                crate::ui::map::render_map(self, ui);
             });
 
         crate::ui::render_map_controls(self, ctx);
