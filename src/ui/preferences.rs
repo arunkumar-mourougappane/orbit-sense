@@ -58,6 +58,12 @@ pub fn render_preferences_window(app: &mut OrbitSenseApp, ctx: &egui::Context) {
 
             ui.checkbox(&mut app.show_orbital_trail, "Show Orbital Trail");
 
+            ui.horizontal(|ui| {
+                ui.label("Swath Footprint Color:");
+                ui.color_edit_button_rgb(&mut app.swath_color);
+            });
+            ui.add(egui::Slider::new(&mut app.swath_opacity, 0.0..=1.0).text("Swath Opacity"));
+
             ui.separator();
             ui.heading("Prediction Settings");
             ui.horizontal(|ui| {

@@ -14,6 +14,8 @@ struct SatellitesPlugin<'a> {
     satellites: &'a std::collections::HashMap<String, SpaceObject>,
     selected_satellite: &'a Option<String>,
     show_orbital_trail: bool,
+    swath_color: [f32; 3],
+    swath_opacity: f32,
 }
 
 impl walkers::Plugin for SatellitesPlugin<'_> {
@@ -104,7 +106,11 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
                         }
 
                         if valid_polygon {
-                            let fill_color = Color32::from_rgba_premultiplied(200, 200, 200, 40);
+                            let r = (self.swath_color[0] * 255.0) as u8;
+                            let g = (self.swath_color[1] * 255.0) as u8;
+                            let b = (self.swath_color[2] * 255.0) as u8;
+                            let a = (self.swath_opacity * 255.0) as u8;
+                            let fill_color = Color32::from_rgba_unmultiplied(r, g, b, a);
                             let stroke = Stroke::new(
                                 1.0,
                                 Color32::from_rgba_premultiplied(255, 255, 255, 100),
@@ -200,6 +206,8 @@ pub fn render_walkers_2d(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
         satellites: &app.satellites,
         selected_satellite: &app.selected_satellite,
         show_orbital_trail: app.show_orbital_trail,
+        swath_color: app.swath_color,
+        swath_opacity: app.swath_opacity,
     });
 
     let _response = ui.add(map);
