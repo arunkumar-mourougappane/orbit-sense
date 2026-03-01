@@ -18,6 +18,34 @@ pub enum AppMessage {
     PassPredicted(Option<(chrono::DateTime<chrono::Utc>, f64)>),
 }
 
+#[derive(PartialEq, Clone)]
+pub enum MapStyle {
+    OpenStreetMap,
+    CartoDark,
+}
+
+/// Custom tile provider using free CartoDB Voyager endpoints.
+/// See: https://github.com/CartoDB/basemap-styles
+pub struct CartoDark;
+
+impl walkers::sources::TileSource for CartoDark {
+    fn tile_url(&self, tile_id: walkers::TileId) -> String {
+        format!(
+            "https://basemaps.cartocdn.com/rastertiles/dark_all/{}/{}/{}.png",
+            tile_id.zoom, tile_id.x, tile_id.y
+        )
+    }
+
+    fn attribution(&self) -> walkers::sources::Attribution {
+        walkers::sources::Attribution {
+            text: "© OpenStreetMap contributors © CARTO",
+            url: "https://carto.com/attributions",
+            logo_light: None,
+            logo_dark: None,
+        }
+    }
+}
+
 /// The core application state running on the `eframe` GUI loop.
 pub struct OrbitSenseApp {
     // Data state
@@ -36,9 +64,12 @@ pub struct OrbitSenseApp {
     pub show_satellite_info: bool,
     pub preferences_open: bool,
     pub show_orbital_trail: bool,
+    pub camera_locked: bool,
     pub pass_threshold_km: f64,
+    pub map_style: MapStyle,
     pub map_memory: MapMemory,
-    pub tiles_manager: HttpTiles,
+    pub tiles_osm: HttpTiles,
+    pub tiles_carto: HttpTiles,
 
     // Async communications
     pub tx: Sender<AppMessage>,
@@ -72,8 +103,17 @@ impl OrbitSenseApp {
             ..Default::default()
         };
 
-        let tiles_manager =
+        let options2 = HttpOptions {
+            user_agent: Some(reqwest::header::HeaderValue::from_static(
+                "orbit-sense/0.1 (amouroug@gemini.local)",
+            )),
+            ..Default::default()
+        };
+
+        let tiles_osm =
             HttpTiles::with_options(walkers::sources::OpenStreetMap, options, ctx.clone());
+        let tiles_carto = HttpTiles::with_options(CartoDark, options2, ctx.clone());
+
         let mut app = Self {
             satellites: HashMap::new(),
             selected_satellite: None,
@@ -86,9 +126,12 @@ impl OrbitSenseApp {
             show_satellite_info: false,
             preferences_open: false,
             show_orbital_trail: true,
+            camera_locked: false,
             pass_threshold_km: crate::constants::DEFAULT_PASS_THRESHOLD_KM,
+            map_style: MapStyle::CartoDark, // Default to sleek Dark Mode
             map_memory: MapMemory::default(),
-            tiles_manager,
+            tiles_osm,
+            tiles_carto,
             tx,
             rx,
             fetch_in_progress: false,

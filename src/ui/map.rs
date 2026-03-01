@@ -61,6 +61,76 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
                         Color32::WHITE,
                     );
 
+                    // --- Draw Visual Footprint (Swath) ---
+                    // The horizon distance 'd' in km from altitude 'h' over Earth radius 'R'
+                    // is typically approximated by the tangent line: d ≈ sqrt(h * (2R + h))
+                    // Though for an arc length distance along the surface it is:
+                    // theta = arccos(R / (R + h))
+                    // footprint_radius = R * theta
+                    let r_earth = crate::constants::EARTH_RADIUS_KM;
+                    let h = obs.altitude_km.max(0.1);
+
+                    if h > 50.0 {
+                        // Calculate the great-circle arc radius in radians
+                        let theta = (r_earth / (r_earth + h)).acos();
+
+                        // We will draw a crude circle by calculating coordinates around the center point
+                        let num_points = 36;
+                        let mut swath_points = Vec::with_capacity(num_points);
+
+                        for i in 0..num_points {
+                            let angle =
+                                (i as f64) * 2.0 * std::f64::consts::PI / (num_points as f64);
+
+                            // Haversine formula inverse to find the point at given distance and bearing
+                            let lat_rad = obs.elevation_deg.to_radians();
+                            let lon_rad = obs.azimuth_deg.to_radians();
+
+                            let point_lat = (lat_rad.sin() * theta.cos()
+                                + lat_rad.cos() * theta.sin() * angle.cos())
+                            .asin();
+                            let mut point_lon = lon_rad
+                                + (angle.sin() * theta.sin() * lat_rad.cos())
+                                    .atan2(theta.cos() - lat_rad.sin() * point_lat.sin());
+
+                            // Normalize longitude
+                            point_lon = (point_lon + 3.0 * std::f64::consts::PI)
+                                % (2.0 * std::f64::consts::PI)
+                                - std::f64::consts::PI;
+
+                            let p = projector.project(Position::new(
+                                point_lon.to_degrees(),
+                                point_lat.to_degrees(),
+                            ));
+                            swath_points.push(p.to_pos2());
+                        }
+
+                        // Because walkers map is 2D Mercator, a circle over the poles will wrap wildly
+                        // We do a simple check to ensure the swath doesn't cross the dateline and break the polygon
+                        let mut valid_polygon = true;
+                        for i in 1..swath_points.len() {
+                            if (swath_points[i].x - swath_points[i - 1].x).abs()
+                                > ui.clip_rect().width() / 2.0
+                            {
+                                valid_polygon = false;
+                                break;
+                            }
+                        }
+
+                        if valid_polygon {
+                            let fill_color = Color32::from_rgba_premultiplied(200, 200, 200, 40);
+                            let stroke = Stroke::new(
+                                1.0,
+                                Color32::from_rgba_premultiplied(255, 255, 255, 100),
+                            );
+                            painter.add(egui::Shape::convex_polygon(
+                                swath_points,
+                                fill_color,
+                                stroke,
+                            ));
+                        }
+                    }
+
                     if self.show_orbital_trail {
                         // Draw the orbit path
                         let mut prev_pos: Option<Position> = None;
@@ -112,11 +182,35 @@ pub fn render_map(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
         let _ = app.map_memory.set_zoom(2.5);
     }
 
-    let mut map = Map::new(
-        Some(&mut app.tiles_manager),
-        &mut app.map_memory,
-        Position::new(0.0, 0.0),
-    );
+    // If Camera Lock is enabled, smoothly follow the satellite's exact coordinate
+    if app.camera_locked {
+        if let Some(name) = &app.selected_satellite {
+            if let Some(sat) = app.satellites.get(name) {
+                if let Some(obs) = calculate_observation(
+                    &sat.elements,
+                    &sat.constants,
+                    &crate::location::Location {
+                        name: "Dummy".to_string(),
+                        lat_deg: 0.0,
+                        lon_deg: 0.0,
+                        alt_m: 0.0,
+                    },
+                    chrono::Utc::now(),
+                ) {
+                    app.map_memory
+                        .center_at(Position::new(obs.azimuth_deg, obs.elevation_deg));
+                }
+            }
+        }
+    }
+
+    // Select the correct tile manager based on the user's Preferences
+    let tiles = match app.map_style {
+        crate::app::MapStyle::OpenStreetMap => &mut app.tiles_osm,
+        crate::app::MapStyle::CartoDark => &mut app.tiles_carto,
+    };
+
+    let mut map = Map::new(Some(tiles), &mut app.map_memory, Position::new(0.0, 0.0));
 
     map = map.with_plugin(SatellitesPlugin {
         satellites: &app.satellites,

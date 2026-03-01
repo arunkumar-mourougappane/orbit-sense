@@ -18,6 +18,26 @@ pub fn render_preferences_window(app: &mut OrbitSenseApp, ctx: &egui::Context) {
         .collapsible(false)
         .show(ctx, |ui| {
             ui.heading("Map Display");
+            ui.horizontal(|ui| {
+                ui.label("Map Theme:");
+                egui::ComboBox::from_id_source("map_style")
+                    .selected_text(match app.map_style {
+                        crate::app::MapStyle::OpenStreetMap => "Light (OSM)",
+                        crate::app::MapStyle::CartoDark => "Dark (CartoDB)",
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(
+                            &mut app.map_style,
+                            crate::app::MapStyle::OpenStreetMap,
+                            "Light (OSM)",
+                        );
+                        ui.selectable_value(
+                            &mut app.map_style,
+                            crate::app::MapStyle::CartoDark,
+                            "Dark (CartoDB)",
+                        );
+                    });
+            });
             ui.checkbox(&mut app.show_orbital_trail, "Show Orbital Trail");
 
             ui.separator();

@@ -61,6 +61,17 @@ pub fn render_map_controls(app: &mut OrbitSenseApp, ctx: &egui::Context) {
                         app.map_memory.center_at(Position::new(0.0, 20.0)); // Default rough Atlantic coords
                     }
                 }
+                
+                let lock_icon = if app.camera_locked { "🔒" } else { "🔓" };
+                let lock_hover = if app.camera_locked { "Unlock Camera" } else { "Auto-Track Satellite" };
+                if ui
+                    .add_sized([30.0, 30.0], egui::Button::new(lock_icon))
+                    .on_hover_text(lock_hover)
+                    .clicked()
+                {
+                    app.camera_locked = !app.camera_locked;
+                }
+                
                 if ui
                     .add_sized([30.0, 30.0], egui::Button::new("ℹ"))
                     .on_hover_text("Satellite Info")
