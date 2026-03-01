@@ -1,7 +1,6 @@
 //! Hovering map controls and the Spacecraft Details pop-out window.
 
-use eframe::egui;
-use walkers::Position;
+use egui;
 
 use crate::app::OrbitSenseApp;
 
@@ -20,50 +19,14 @@ pub fn render_map_controls(app: &mut OrbitSenseApp, ctx: &egui::Context) {
         .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-10.0, -10.0))
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
-                if ui
-                    .add_sized([30.0, 30.0], egui::Button::new("➕"))
-                    .on_hover_text("Zoom In")
-                    .clicked()
-                {
-                    let _ = app.map_memory.zoom_in();
-                }
-                if ui
-                    .add_sized([30.0, 30.0], egui::Button::new("➖"))
-                    .on_hover_text("Zoom Out")
-                    .clicked()
-                {
-                    let _ = app.map_memory.zoom_out();
-                }
-                if ui
-                    .add_sized([30.0, 30.0], egui::Button::new("🌐"))
-                    .on_hover_text("Max Zoomout")
-                    .clicked()
-                {
-                    let _ = app.map_memory.set_zoom(2.5);
-                }
-                if ui
-                    .add_sized([30.0, 30.0], egui::Button::new("🗺"))
-                    .on_hover_text("Fit to Window")
-                    .clicked()
-                {
-                    app.map_memory.center_at(Position::new(0.0, 0.0));
-                    let _ = app.map_memory.set_zoom(2.5);
-                }
-                if ui
-                    .add_sized([30.0, 30.0], egui::Button::new("📍"))
-                    .on_hover_text("Center on Observer")
-                    .clicked()
-                {
-                    if let Some(obs) = &app.observer {
-                        app.map_memory
-                            .center_at(Position::new(obs.lon_deg, obs.lat_deg));
-                    } else {
-                        app.map_memory.center_at(Position::new(0.0, 20.0)); // Default rough Atlantic coords
-                    }
-                }
-                
+                ui.label("3D Controls coming...");
+
                 let lock_icon = if app.camera_locked { "🔒" } else { "🔓" };
-                let lock_hover = if app.camera_locked { "Unlock Camera" } else { "Auto-Track Satellite" };
+                let lock_hover = if app.camera_locked {
+                    "Unlock Camera"
+                } else {
+                    "Auto-Track Satellite"
+                };
                 if ui
                     .add_sized([30.0, 30.0], egui::Button::new(lock_icon))
                     .on_hover_text(lock_hover)
@@ -71,7 +34,7 @@ pub fn render_map_controls(app: &mut OrbitSenseApp, ctx: &egui::Context) {
                 {
                     app.camera_locked = !app.camera_locked;
                 }
-                
+
                 if ui
                     .add_sized([30.0, 30.0], egui::Button::new("ℹ"))
                     .on_hover_text("Satellite Info")
