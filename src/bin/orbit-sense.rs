@@ -2,12 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 use eframe::egui;
-
-mod app;
-mod constants;
-mod location;
-mod satellites;
-mod ui;
+use orbit_sense::app;
 
 #[tokio::main]
 async fn main() -> eframe::Result<()> {
