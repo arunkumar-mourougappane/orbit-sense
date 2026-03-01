@@ -109,16 +109,12 @@ pub fn calculate_observation(
     _observer: &Location,
     time: DateTime<Utc>,
 ) -> Option<Observation> {
-    // Calculate minutes since the TLE epoch using Julian dates
-    let current_jd = time.timestamp() as f64 / 86400.0 + 2440587.5;
-    let epoch_jd = elements.epoch() + 2440587.5; // elements.epoch() returns days from 1949 Dec 31 00:00 UT
+    // Calculate minutes since the TLE epoch using the built-in function
+    let naive_time = time.naive_utc();
+    let minutes_since_epoch = elements.datetime_to_minutes_since_epoch(&naive_time).ok()?;
 
-    // Convert to minutes
-    let minutes_since_epoch = (current_jd - epoch_jd) * 1440.0;
     // Propagate the satellite state vector to the requested time
-    let prediction = constants
-        .propagate(sgp4::MinutesSinceEpoch(minutes_since_epoch))
-        .ok()?;
+    let prediction = constants.propagate(minutes_since_epoch).ok()?;
 
     // Convert prediction vectors (which are in TEME frame) to Geodetic
     // (This is an approximation assuming TEME ~ ECEF for a simplified visualizer)
