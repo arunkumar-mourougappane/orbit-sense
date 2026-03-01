@@ -1,3 +1,5 @@
+//! Fetches satellite TLE data from CelesTrak and parses it into Orbit Sense data structures.
+
 use serde::{Deserialize, Serialize};
 use sgp4::{Constants, Elements};
 use std::collections::HashMap;

@@ -1,8 +1,11 @@
+//! Configuration Window for tuning the application's calculations and displays.
+
 use eframe::egui;
 
 use crate::app::OrbitSenseApp;
 use crate::constants::DEFAULT_PASS_THRESHOLD_KM;
 
+/// Renders the `File > Preferences` popup window to configure prediction thresholds.
 pub fn render_preferences_window(app: &mut OrbitSenseApp, ctx: &egui::Context) {
     if !app.preferences_open {
         return;

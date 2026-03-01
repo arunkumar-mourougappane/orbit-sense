@@ -1,3 +1,5 @@
+//! Main application state and startup logic for Orbit Sense.
+
 use eframe::egui;
 use std::collections::HashMap;
 use tokio::sync::mpsc::{self, Receiver, Sender};
@@ -6,13 +8,17 @@ use walkers::{HttpOptions, HttpTiles, MapMemory, Position};
 use crate::location::Location;
 use crate::satellites::{SpaceObject, fetch_active_satellites};
 
-// Messages from async tasks back to the UI thread
+/// Messages passed from background asynchronous tasks back to the UI thread.
 pub enum AppMessage {
+    /// Received a payload containing the successfully parsed Celestrak dataset, or an error.
     SatellitesLoaded(Result<HashMap<String, SpaceObject>, String>),
+    /// Received a parsed lat/lon coordinate from Nominatim, or an error.
     LocationGeocoded(Result<Location, String>),
+    /// Emitted after `predict_next_pass` completes evaluating the upcoming 24 hours.
     PassPredicted(Option<(chrono::DateTime<chrono::Utc>, f64)>),
 }
 
+/// The core application state running on the `eframe` GUI loop.
 pub struct OrbitSenseApp {
     // Data state
     pub satellites: HashMap<String, SpaceObject>,
@@ -45,6 +51,8 @@ pub struct OrbitSenseApp {
 }
 
 impl OrbitSenseApp {
+    /// Constructs the initial state of the application.
+    /// Injects `reqwest` headers for Celestrak mapping and pulls initial cache.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // Customize egui here with cc.egui_ctx.set_visuals and set_fonts
         let mut style = (*cc.egui_ctx.style()).clone();
@@ -129,11 +137,13 @@ impl OrbitSenseApp {
 
         app
     }
+    /// Update the currently focused satellite and trigger an asynchronous `trigger_pass_prediction()` calculation.
     pub fn set_selected_satellite(&mut self, name: Option<String>) {
         self.selected_satellite = name;
         self.trigger_pass_prediction();
     }
 
+    /// Sorts and filters the global dataset dictionary into a vector of keys based on the `search_query` text.
     pub fn update_filtered_satellites(&mut self) {
         let query = self.search_query.to_lowercase();
         let mut keys: Vec<String> = self
@@ -146,6 +156,7 @@ impl OrbitSenseApp {
         self.filtered_satellites = keys;
     }
 
+    /// Spawns a background `tokio` thread to predict the next overhead pass using `location::predict_next_pass`.
     pub fn trigger_pass_prediction(&mut self) {
         if self.observer.is_none() || self.selected_satellite.is_none() {
             self.last_predicted_pass = None;

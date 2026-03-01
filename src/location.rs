@@ -1,8 +1,11 @@
+//! Provides geographic utilities, geocoding for cities, and TLE orbital calculations.
+
 use chrono::{DateTime, Utc};
 use geocoding::{Forward, Openstreetmap};
 use serde::{Deserialize, Serialize};
 use sgp4::{Constants, Elements};
 
+/// Represents a geographic location on Earth (latitude, longitude, altitude).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Location {
     pub name: String,
@@ -40,6 +43,7 @@ impl Location {
     }
 }
 
+/// Computes the great-circle distance between two points on a sphere (Earth) in kilometers.
 pub fn haversine_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     let r = crate::constants::EARTH_RADIUS_KM;
     let dlat = (lat2 - lat1).to_radians();
@@ -50,6 +54,8 @@ pub fn haversine_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     r * c
 }
 
+/// Asynchronously predicts the next time the given satellite will pass within
+/// the `threshold_km` distance of the provided `obs` Location over the next 24 hours.
 pub async fn predict_next_pass(
     sat: crate::satellites::SpaceObject,
     obs: Location,

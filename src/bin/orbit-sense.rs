@@ -1,9 +1,12 @@
 #![warn(clippy::all, rust_2018_idioms)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
+//! Entrypoint for the application.
+
 use eframe::egui;
 use orbit_sense::app;
 
+/// Starts the `tokio` asynchronous runtime and initializes the `eframe` window.
 #[tokio::main]
 async fn main() -> eframe::Result<()> {
     // Log to stdout (if you run with `RUST_LOG=debug`).

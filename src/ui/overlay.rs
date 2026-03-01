@@ -1,8 +1,12 @@
+//! Hovering map controls and the Spacecraft Details pop-out window.
+
 use eframe::egui;
 use walkers::Position;
 
 use crate::app::OrbitSenseApp;
 
+/// Renders the translucent floating navigation toolbox in the corner of the map.
+/// Includes zoom interactions, window fitting, and the Details toggle.
 pub fn render_map_controls(app: &mut OrbitSenseApp, ctx: &egui::Context) {
     let frame = egui::Frame::window(&ctx.style())
         .inner_margin(6.0)
@@ -68,6 +72,8 @@ pub fn render_map_controls(app: &mut OrbitSenseApp, ctx: &egui::Context) {
         });
 }
 
+/// Renders the `egui::Window` displaying orbital mechanics math, real-time positional
+/// tracking, and the output of the next predicted overhead pass. Continually requests UI repetition.
 pub fn render_satellite_info(app: &mut OrbitSenseApp, ctx: &egui::Context) {
     if !app.show_satellite_info {
         return;

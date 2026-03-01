@@ -1,3 +1,5 @@
+//! Core map rendering logic using the `walkers` crate.
+
 use chrono::Utc;
 use eframe::egui::{self, Color32, Stroke};
 use walkers::{Map, Position};
@@ -7,6 +9,8 @@ use crate::constants::ORBITAL_TRAIL_MINUTES;
 use crate::location::{Location, calculate_observation};
 use crate::satellites::SpaceObject;
 
+/// A custom `walkers::Plugin` that draws the selected satellite and its orbital trail
+/// onto the map canvas in real-time.
 struct SatellitesPlugin<'a> {
     satellites: &'a std::collections::HashMap<String, SpaceObject>,
     selected_satellite: &'a Option<String>,
@@ -100,6 +104,9 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
         }
     }
 }
+
+/// Sets up the zoom boundaries and injects the `SatellitesPlugin` into the `walkers::Map`.
+/// This also triggers the continuous repaint animation for smooth tracking.
 pub fn render_map(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
     if app.map_memory.zoom() < 2.5 {
         let _ = app.map_memory.set_zoom(2.5);

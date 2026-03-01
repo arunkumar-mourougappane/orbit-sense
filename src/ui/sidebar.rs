@@ -1,8 +1,11 @@
+//! Renders the left-hand navigation sidebar for selecting satellites and searching observer coordinates.
+
 use crate::app::{AppMessage, OrbitSenseApp};
 use crate::location::Location;
 use crate::satellites::fetch_active_satellites;
 use eframe::egui;
 
+/// Renders the sidebar containing the observer location input and the list of active satellites.
 pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
     ui.heading("Orbit Sense");
     ui.separator();
