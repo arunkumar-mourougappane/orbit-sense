@@ -31,6 +31,21 @@ pub fn render_map_controls(app: &mut OrbitSenseApp, ctx: &egui::Context) {
                     let _ = app.map_memory.zoom_out();
                 }
                 if ui
+                    .add_sized([30.0, 30.0], egui::Button::new("🌐"))
+                    .on_hover_text("Max Zoomout")
+                    .clicked()
+                {
+                    let _ = app.map_memory.set_zoom(2.5);
+                }
+                if ui
+                    .add_sized([30.0, 30.0], egui::Button::new("🗺"))
+                    .on_hover_text("Fit to Window")
+                    .clicked()
+                {
+                    app.map_memory.center_at(Position::new(0.0, 0.0));
+                    let _ = app.map_memory.set_zoom(2.5);
+                }
+                if ui
                     .add_sized([30.0, 30.0], egui::Button::new("📍"))
                     .on_hover_text("Center on Observer")
                     .clicked()
