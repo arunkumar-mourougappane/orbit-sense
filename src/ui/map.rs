@@ -113,6 +113,10 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
 }
 
 pub fn render_map(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
+    if app.map_memory.zoom() < 2.5 {
+        let _ = app.map_memory.set_zoom(2.5);
+    }
+
     let mut map = Map::new(
         Some(&mut app.tiles_manager),
         &mut app.map_memory,

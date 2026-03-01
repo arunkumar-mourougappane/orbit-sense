@@ -236,9 +236,11 @@ impl eframe::App for OrbitSenseApp {
             crate::ui::render_sidebar(self, ui);
         });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            crate::ui::render_map(self, ui);
-        });
+        egui::CentralPanel::default()
+            .frame(egui::Frame::central_panel(&ctx.style()).inner_margin(0.0))
+            .show(ctx, |ui| {
+                crate::ui::render_map(self, ui);
+            });
 
         crate::ui::render_map_controls(self, ctx);
         crate::ui::render_satellite_info(self, ctx);
