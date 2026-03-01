@@ -14,30 +14,80 @@ pub struct Location {
 impl Location {
     /// Attempt to geocode a string like "City, Country" into a Location.
     /// Uses OpenStreetMap's Nominatim, so we need to provide an app user agent.
-    pub async fn from_query(query: &str) -> Option<Self> {
+    pub async fn from_query(query: &str) -> Result<Self, String> {
         let query_clone = query.to_string();
         let mut results = match tokio::task::spawn_blocking(move || {
             let openstreetmap = Openstreetmap::new();
             openstreetmap.forward(&query_clone)
         })
         .await
-        .ok()?
         {
-            Ok(locs) => locs,
-            Err(_) => return None,
+            Ok(Ok(locs)) => locs,
+            Ok(Err(e)) => return Err(format!("Geocoding API error: {}", e)),
+            Err(e) => return Err(format!("Task error: {}", e)),
         };
 
         if let Some(res) = results.pop() {
-            Some(Self {
+            Ok(Self {
                 name: query.to_string(),
                 lat_deg: res.y(),
                 lon_deg: res.x(),
                 alt_m: 0.0, // Nominatim doesn't provide altitude, default to sea level
             })
         } else {
-            None
+            Err("Location not found".to_string())
         }
     }
+}
+
+pub fn haversine_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+    let r = crate::constants::EARTH_RADIUS_KM;
+    let dlat = (lat2 - lat1).to_radians();
+    let dlon = (lon2 - lon1).to_radians();
+    let a = (dlat / 2.0).sin().powi(2)
+        + lat1.to_radians().cos() * lat2.to_radians().cos() * (dlon / 2.0).sin().powi(2);
+    let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
+    r * c
+}
+
+pub async fn predict_next_pass(
+    sat: crate::satellites::SpaceObject,
+    obs: Location,
+    threshold_km: f64,
+) -> Option<(DateTime<Utc>, f64)> {
+    tokio::task::spawn_blocking(move || {
+        let mut next_pass = None;
+        let now = Utc::now();
+        for min in 1..=crate::constants::PASS_SEARCH_MINUTES {
+            let future_t = now + chrono::Duration::minutes(min);
+            if let Some(pass_obs) = calculate_observation(
+                &sat.elements,
+                &sat.constants,
+                &Location {
+                    name: "Dummy".to_string(),
+                    lat_deg: 0.0,
+                    lon_deg: 0.0,
+                    alt_m: 0.0,
+                },
+                future_t,
+            ) {
+                let dist = haversine_distance(
+                    obs.lat_deg,
+                    obs.lon_deg,
+                    pass_obs.elevation_deg,
+                    pass_obs.azimuth_deg,
+                );
+
+                if dist < threshold_km {
+                    next_pass = Some((future_t, dist));
+                    break;
+                }
+            }
+        }
+        next_pass
+    })
+    .await
+    .unwrap_or(None)
 }
 
 /// A simplified observation at a specific time

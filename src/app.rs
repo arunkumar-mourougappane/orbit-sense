@@ -9,7 +9,8 @@ use crate::satellites::{SpaceObject, fetch_active_satellites};
 // Messages from async tasks back to the UI thread
 pub enum AppMessage {
     SatellitesLoaded(Result<HashMap<String, SpaceObject>, String>),
-    LocationGeocoded(Option<Location>),
+    LocationGeocoded(Result<Location, String>),
+    PassPredicted(Option<(chrono::DateTime<chrono::Utc>, f64)>),
 }
 
 pub struct OrbitSenseApp {
@@ -17,12 +18,19 @@ pub struct OrbitSenseApp {
     pub satellites: HashMap<String, SpaceObject>,
     pub selected_satellite: Option<String>,
     pub search_query: String,
+    pub filtered_satellites: Vec<String>,
+    pub last_updated: Option<chrono::DateTime<chrono::Local>>,
 
     // Observer state
     pub observer: Option<Location>,
     pub location_query: String,
+    pub last_predicted_pass: Option<(chrono::DateTime<chrono::Utc>, f64)>,
+
     // UI state
     pub show_satellite_info: bool,
+    pub preferences_open: bool,
+    pub show_orbital_trail: bool,
+    pub pass_threshold_km: f64,
     pub map_memory: MapMemory,
     pub tiles_manager: HttpTiles,
 
@@ -32,6 +40,7 @@ pub struct OrbitSenseApp {
 
     pub fetch_in_progress: bool,
     pub location_in_progress: bool,
+    pub is_predicting_pass: bool,
     pub error_msg: Option<String>,
 }
 
@@ -61,15 +70,22 @@ impl OrbitSenseApp {
             satellites: HashMap::new(),
             selected_satellite: None,
             search_query: String::new(),
+            filtered_satellites: Vec::new(),
+            last_updated: None,
             observer: None,
             location_query: String::new(),
+            last_predicted_pass: None,
             show_satellite_info: false,
+            preferences_open: false,
+            show_orbital_trail: true,
+            pass_threshold_km: crate::constants::DEFAULT_PASS_THRESHOLD_KM,
             map_memory: MapMemory::default(),
             tiles_manager,
             tx,
             rx,
             fetch_in_progress: false,
             location_in_progress: false,
+            is_predicting_pass: false,
             error_msg: None,
         };
 
@@ -113,6 +129,44 @@ impl OrbitSenseApp {
 
         app
     }
+    pub fn set_selected_satellite(&mut self, name: Option<String>) {
+        self.selected_satellite = name;
+        self.trigger_pass_prediction();
+    }
+
+    pub fn update_filtered_satellites(&mut self) {
+        let query = self.search_query.to_lowercase();
+        let mut keys: Vec<String> = self
+            .satellites
+            .keys()
+            .filter(|k| k.to_lowercase().contains(&query))
+            .cloned()
+            .collect();
+        keys.sort();
+        self.filtered_satellites = keys;
+    }
+
+    pub fn trigger_pass_prediction(&mut self) {
+        if self.observer.is_none() || self.selected_satellite.is_none() {
+            self.last_predicted_pass = None;
+            return;
+        }
+        self.is_predicting_pass = true;
+        let tx = self.tx.clone();
+        let sat = self
+            .satellites
+            .get(self.selected_satellite.as_ref().unwrap())
+            .cloned();
+        let obs = self.observer.clone().unwrap();
+        let threshold = self.pass_threshold_km;
+
+        tokio::spawn(async move {
+            if let Some(s) = sat {
+                let pass = crate::location::predict_next_pass(s, obs, threshold).await;
+                let _ = tx.send(AppMessage::PassPredicted(pass)).await;
+            }
+        });
+    }
 }
 
 impl eframe::App for OrbitSenseApp {
@@ -139,21 +193,28 @@ impl eframe::App for OrbitSenseApp {
                     self.satellites = sats;
                     self.fetch_in_progress = false;
                     self.error_msg = None;
+                    self.last_updated = Some(chrono::Local::now());
+                    self.update_filtered_satellites();
                 }
                 AppMessage::SatellitesLoaded(Err(e)) => {
                     self.fetch_in_progress = false;
                     self.error_msg = Some(e);
                 }
-                AppMessage::LocationGeocoded(Some(loc)) => {
+                AppMessage::LocationGeocoded(Ok(loc)) => {
                     self.map_memory
                         .center_at(Position::new(loc.lon_deg, loc.lat_deg));
                     self.observer = Some(loc);
                     self.location_in_progress = false;
                     self.error_msg = None;
+                    self.trigger_pass_prediction();
                 }
-                AppMessage::LocationGeocoded(None) => {
+                AppMessage::LocationGeocoded(Err(e)) => {
                     self.location_in_progress = false;
-                    self.error_msg = Some("Location not found".to_string());
+                    self.error_msg = Some(e);
+                }
+                AppMessage::PassPredicted(pass) => {
+                    self.last_predicted_pass = pass;
+                    self.is_predicting_pass = false;
                 }
             }
         }
@@ -162,7 +223,7 @@ impl eframe::App for OrbitSenseApp {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("File", |ui| {
                     if ui.button("Preferences").clicked() {
-                        // For now, this is just a placeholder
+                        self.preferences_open = !self.preferences_open;
                     }
                     if ui.button("Quit").clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -178,6 +239,10 @@ impl eframe::App for OrbitSenseApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             crate::ui::render_map(self, ui);
         });
+
+        crate::ui::render_map_controls(self, ctx);
+        crate::ui::render_satellite_info(self, ctx);
+        crate::ui::render_preferences_window(self, ctx);
 
         crate::ui::render_satellite_info(self, ctx);
     }

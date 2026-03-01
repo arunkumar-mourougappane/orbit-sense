@@ -1,0 +1,4 @@
+pub const EARTH_RADIUS_KM: f64 = 6371.0;
+pub const ORBITAL_TRAIL_MINUTES: i64 = 90;
+pub const PASS_SEARCH_MINUTES: i64 = 1440;
+pub const DEFAULT_PASS_THRESHOLD_KM: f64 = 2000.0;
