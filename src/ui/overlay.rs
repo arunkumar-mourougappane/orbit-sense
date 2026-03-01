@@ -91,6 +91,25 @@ pub fn render_satellite_info(app: &mut OrbitSenseApp, ctx: &egui::Context) {
         .collapsible(false)
         .show(ctx, |ui| {
             ui.heading("Spacecraft Details");
+            
+            if let Some(obs) = crate::location::calculate_observation(
+                &sat.elements,
+                &sat.constants,
+                &crate::location::Location {
+                    name: "".to_string(),
+                    lat_deg: 0.0,
+                    lon_deg: 0.0,
+                    alt_m: 0.0,
+                },
+                chrono::Utc::now(),
+            ) {
+                ui.label(format!("Altitude: {:.1} km", obs.altitude_km));
+                ui.label(format!("Velocity: {:.2} km/s", obs.velocity_km_s));
+                ui.label(format!("Latitude: {:.4}°", obs.elevation_deg));
+                ui.label(format!("Longitude: {:.4}°", obs.azimuth_deg));
+                ui.separator();
+            }
+
             ui.label(format!("NORAD ID: {}", sat.elements.norad_id));
             if let Some(id) = &sat.elements.international_designator {
                 ui.label(format!("Int. Designator: {}", id));
@@ -127,4 +146,7 @@ pub fn render_satellite_info(app: &mut OrbitSenseApp, ctx: &egui::Context) {
         });
 
     app.show_satellite_info = open;
+    if open {
+        ctx.request_repaint();
+    }
 }

@@ -99,6 +99,8 @@ pub struct Observation {
     pub azimuth_deg: f64,
     #[allow(dead_code)]
     pub range_km: f64,
+    pub altitude_km: f64,
+    pub velocity_km_s: f64,
 }
 
 /// Calculates where a satellite is in the sky relative to an observer on Earth.
@@ -164,10 +166,16 @@ pub fn calculate_observation(
     let lat_deg = lat * 180.0 / std::f64::consts::PI;
     let lon_deg = lon * 180.0 / std::f64::consts::PI;
 
+    let altitude_km = (x * x + y * y + z * z).sqrt() - a;
+    let v = prediction.velocity;
+    let velocity_km_s = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+
     Some(Observation {
         time,
         elevation_deg: lat_deg, // Repurposing these struct fields for passing visual tracking coordiantes to UI
         azimuth_deg: lon_deg,
         range_km: p,
+        altitude_km,
+        velocity_km_s,
     })
 }
