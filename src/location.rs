@@ -109,20 +109,18 @@ pub async fn predict_next_pass(
                         pass_best_dist = f64::MAX;
                         min += 1; // Resume search with 1 min to allow safe_step calc next loop
                     }
+                } else if dist < threshold_km {
+                    // We entered the pass radius
+                    in_pass = true;
+                    pass_best_dist = dist;
+                    pass_best_time = future_t;
+                    min += 1; // Tracing pass minute-by-minute
                 } else {
-                    if dist < threshold_km {
-                        // We entered the pass radius
-                        in_pass = true;
-                        pass_best_dist = dist;
-                        pass_best_time = future_t;
-                        min += 1; // Tracing pass minute-by-minute
-                    } else {
-                        // We are outside. How many minutes can we safely skip?
-                        // Assuming 450 km/min max ground speed.
-                        let safe_step = (buffer / 450.0).floor() as i64;
-                        let step = safe_step.clamp(1, 15); // Step by at least 1, up to 15 mins max
-                        min += step;
-                    }
+                    // We are outside. How many minutes can we safely skip?
+                    // Assuming 450 km/min max ground speed.
+                    let safe_step = (buffer / 450.0).floor() as i64;
+                    let step = safe_step.clamp(1, 15); // Step by at least 1, up to 15 mins max
+                    min += step;
                 }
             } else {
                 min += 1; // If error, just advance 1 min
