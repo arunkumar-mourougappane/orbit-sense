@@ -98,7 +98,6 @@ pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
     let mut category_changed = false;
     egui::ComboBox::from_id_salt("satellite_category")
         .selected_text(app.satellite_category.name())
-        .width(f32::INFINITY)
         .show_ui(ui, |ui| {
             let mut current_group = "";
             for &cat in crate::satellites::SatelliteCategory::all() {
@@ -123,13 +122,11 @@ pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
             }
         });
 
-    // Handle category change or manual refresh
-    if (category_changed
-        || ui
-            .add_sized([f32::INFINITY, 22.0], egui::Button::new("↻  Refresh TLEs"))
-            .clicked())
-        && !app.fetch_in_progress
-    {
+    // Refresh button — always render to keep egui ID stable
+    let refresh_clicked = ui
+        .add_sized([f32::INFINITY, 22.0], egui::Button::new("↻  Refresh TLEs"))
+        .clicked();
+    if (category_changed || refresh_clicked) && !app.fetch_in_progress {
         if category_changed {
             app.satellites.clear();
             app.filtered_satellites.clear();
