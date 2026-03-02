@@ -73,7 +73,7 @@ impl AppSettings {
 }
 
 /// Custom tile provider using free CartoDB Voyager endpoints.
-/// See: https://github.com/CartoDB/basemap-styles
+/// See: <https://github.com/CartoDB/basemap-styles>
 pub struct CartoDark;
 
 impl walkers::sources::TileSource for CartoDark {
@@ -131,7 +131,7 @@ pub struct OrbitSenseApp {
     pub camera_locked: bool,
     /// Upper limit distance in kilometers triggering a successful overhead pass prediction.
     pub pass_threshold_km: f64,
-    /// GUI preference for the [r,g,b] swath color, mapped 0.0 to 1.0.
+    /// GUI preference for the `[r,g,b]` swath color, mapped 0.0 to 1.0.
     pub swath_color: [f32; 3],
     /// GUI preference for the swath alpha opacity, mapped 0.0 to 1.0.
     pub swath_opacity: f32,
