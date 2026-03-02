@@ -336,9 +336,13 @@ impl eframe::App for OrbitSenseApp {
             });
         });
 
-        egui::SidePanel::left("sidebar").show(ctx, |ui| {
-            crate::ui::render_sidebar(self, ui);
-        });
+        egui::SidePanel::left("sidebar")
+            .default_width(240.0)
+            .min_width(180.0)
+            .resizable(true)
+            .show(ctx, |ui| {
+                crate::ui::render_sidebar(self, ui);
+            });
 
         egui::CentralPanel::default()
             .frame(egui::Frame::central_panel(&ctx.style()).inner_margin(0.0))
