@@ -3,6 +3,14 @@ name = "orbit-sense"
 version = "0.1.0"
 edition = "2024"
 authors = ["Arunkumar Mourougappane <amouroug.dev@gmail.com>"]
+description = "A real-time satellite tracking application with 2D map visualization, orbital pass prediction, and live telemetry."
+license = "MIT"
+repository = "https://github.com/arunkumar-mourougappane/orbit-sense"
+homepage = "https://github.com/arunkumar-mourougappane/orbit-sense"
+documentation = "https://github.com/arunkumar-mourougappane/orbit-sense#readme"
+keywords = ["satellite", "tracking", "space", "tle", "sgp4"]
+categories = ["science", "visualization", "gui"]
+readme = "README.md"
 
 [dependencies]
 chrono = "0.4.44"
