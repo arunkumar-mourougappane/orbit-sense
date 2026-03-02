@@ -19,7 +19,7 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libvulkan-dev
       
     - name: Cache cargo registry
-      uses: Swatinem/rust-cache@v2
+      uses: Swatinem/rust-cache@v2.7.7
 
     - name: Run clippy
       run: cargo clippy --all-targets --all-features -- -D warnings
