@@ -96,11 +96,10 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
                 painter.circle_filled(screen_pos, 3.0, dot_color.gamma_multiply(0.75));
 
                 // Hover detection
-                if let Some(cursor) = self.cursor_pos {
-                    if (screen_pos - cursor).length() < 8.0 {
-                        tooltip =
-                            Some((screen_pos, format!("{}\n{:.0} km", name, obs.altitude_km)));
-                    }
+                if let Some(cursor) = self.cursor_pos
+                    && (screen_pos - cursor).length() < 8.0
+                {
+                    tooltip = Some((screen_pos, format!("{}\n{:.0} km", name, obs.altitude_km)));
                 }
             }
         }
