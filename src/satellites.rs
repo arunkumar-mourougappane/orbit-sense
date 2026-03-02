@@ -237,6 +237,8 @@ pub struct SpaceObject {
     pub elements: Elements,
     /// Pre-computed SGP4 constants derived from the orbital elements.
     pub constants: Constants,
+    /// The altitude of the satellite in km at the time of fetching, cached for rapid sorting.
+    pub cached_altitude: f64,
 }
 
 impl SpaceObject {
@@ -247,16 +249,37 @@ impl SpaceObject {
     /// - `line2` — TLE line 2 (starts with `2`)
     ///
     /// Returns `None` if parsing or SGP4 constant derivation fails.
-    pub fn from_tle(name: &str, line1: &str, line2: &str) -> Option<Self> {
+    pub fn from_tle(
+        name: &str,
+        line1: &str,
+        line2: &str,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Option<Self> {
         let name = name.trim().to_string();
         let elements =
             Elements::from_tle(Some(name.clone()), line1.as_bytes(), line2.as_bytes()).ok()?;
         let constants = Constants::from_elements(&elements).ok()?;
 
+        // Calculate altitude once and cache it for instant sorting later
+        let cached_altitude = crate::location::calculate_observation(
+            &elements,
+            &constants,
+            &crate::location::Location {
+                name: String::new(),
+                lat_deg: 0.0,
+                lon_deg: 0.0,
+                alt_m: 0.0,
+            },
+            now,
+        )
+        .map(|obs| obs.altitude_km)
+        .unwrap_or(0.0);
+
         Some(Self {
             name,
             elements,
             constants,
+            cached_altitude,
         })
     }
 }
@@ -277,13 +300,14 @@ pub async fn fetch_active_satellites(
     let mut objects = HashMap::new();
     let lines: Vec<&str> = response.lines().collect();
 
+    let now = chrono::Utc::now();
     for chunk in lines.chunks(3) {
         if chunk.len() == 3 {
             let name = chunk[0].trim();
             let line1 = chunk[1];
             let line2 = chunk[2];
 
-            if let Some(obj) = SpaceObject::from_tle(name, line1, line2) {
+            if let Some(obj) = SpaceObject::from_tle(name, line1, line2, now) {
                 objects.insert(name.to_string(), obj);
             }
         }

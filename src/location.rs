@@ -69,7 +69,10 @@ pub async fn predict_next_pass(
         let mut pass_best_time = now;
 
         // Search next 48 hours (48 * 60 = 2880 minutes)
-        for min in 1..=2880 {
+        // Use dynamic stepping based on distance to massive reduce SGP4 math while guaranteeing
+        // we never skip over a pass. Max ground speed of a satellite is roughly 450 km/minute.
+        let mut min = 1;
+        while min <= 2880 {
             let future_t = now + chrono::Duration::minutes(min);
             if let Some(pass_obs) = calculate_observation(
                 &sat.elements,
@@ -89,17 +92,40 @@ pub async fn predict_next_pass(
                     pass_obs.sub_lon_deg,
                 );
 
-                if dist < threshold_km {
-                    in_pass = true;
-                    if dist < pass_best_dist {
+                let buffer = dist - threshold_km;
+
+                if in_pass {
+                    if dist < threshold_km {
+                        // Still in pass, find the peak
+                        if dist < pass_best_dist {
+                            pass_best_dist = dist;
+                            pass_best_time = future_t;
+                        }
+                        min += 1;
+                    } else {
+                        // Pass ended
+                        passes.push((pass_best_time, pass_best_dist));
+                        in_pass = false;
+                        pass_best_dist = f64::MAX;
+                        min += 1; // Resume search with 1 min to allow safe_step calc next loop
+                    }
+                } else {
+                    if dist < threshold_km {
+                        // We entered the pass radius
+                        in_pass = true;
                         pass_best_dist = dist;
                         pass_best_time = future_t;
+                        min += 1; // Tracing pass minute-by-minute
+                    } else {
+                        // We are outside. How many minutes can we safely skip?
+                        // Assuming 450 km/min max ground speed.
+                        let safe_step = (buffer / 450.0).floor() as i64;
+                        let step = safe_step.clamp(1, 15); // Step by at least 1, up to 15 mins max
+                        min += step;
                     }
-                } else if in_pass {
-                    passes.push((pass_best_time, pass_best_dist));
-                    in_pass = false;
-                    pass_best_dist = f64::MAX;
                 }
+            } else {
+                min += 1; // If error, just advance 1 min
             }
         }
 

@@ -2,7 +2,6 @@
 //! with orbital trail and footprint, an observer pin, and hover tooltips.
 
 use crate::app::OrbitSenseApp;
-use crate::constants::ORBITAL_TRAIL_MINUTES;
 use crate::location::{Location, calculate_observation};
 use crate::satellites::SpaceObject;
 use chrono::Utc;
@@ -36,6 +35,11 @@ struct SatellitesPlugin<'a> {
     show_orbital_trail: bool,
     swath_color: [f32; 3],
     swath_opacity: f32,
+    cached_trail: &'a Option<(
+        chrono::DateTime<chrono::Utc>,
+        String,
+        Vec<walkers::Position>,
+    )>,
 }
 
 impl walkers::Plugin for SatellitesPlugin<'_> {
@@ -169,23 +173,10 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
 
             // ── Orbital trail ─────────────────────────────────────────
             if self.show_orbital_trail {
-                let mut prev_pos: Option<Position> = None;
+                if let Some((_, _, trail)) = self.cached_trail {
+                    let mut prev_pos: Option<Position> = None;
 
-                for minute_offset in 1..=ORBITAL_TRAIL_MINUTES {
-                    let future_time = now + chrono::Duration::minutes(minute_offset);
-                    if let Some(fut) = calculate_observation(
-                        &sat.elements,
-                        &sat.constants,
-                        &Location {
-                            name: String::new(),
-                            lat_deg: 0.0,
-                            lon_deg: 0.0,
-                            alt_m: 0.0,
-                        },
-                        future_time,
-                    ) {
-                        let curr_pos = Position::new(fut.sub_lon_deg, fut.sub_lat_deg);
-
+                    for &curr_pos in trail {
                         if let Some(prev) =
                             prev_pos.filter(|p| (curr_pos.x() - p.x()).abs() < 180.0)
                         {
@@ -236,6 +227,42 @@ pub fn render_map(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
         crate::app::MapStyle::CartoDark => &mut app.tiles_carto,
     };
 
+    if app.show_orbital_trail {
+        if let Some(name) = &app.selected_satellite {
+            if let Some(sat) = app.satellites.get(name) {
+                let now = chrono::Utc::now();
+                let needs_update = match &app.cached_trail {
+                    None => true,
+                    Some((time, cached_name, _)) => {
+                        cached_name != name || (now - *time).num_seconds() > 60
+                    }
+                };
+
+                if needs_update {
+                    let mut trail =
+                        Vec::with_capacity(crate::constants::ORBITAL_TRAIL_MINUTES as usize);
+                    for minute_offset in 1..=crate::constants::ORBITAL_TRAIL_MINUTES {
+                        let future_time = now + chrono::Duration::minutes(minute_offset);
+                        if let Some(fut) = calculate_observation(
+                            &sat.elements,
+                            &sat.constants,
+                            &Location {
+                                name: String::new(),
+                                lat_deg: 0.0,
+                                lon_deg: 0.0,
+                                alt_m: 0.0,
+                            },
+                            future_time,
+                        ) {
+                            trail.push(Position::new(fut.sub_lon_deg, fut.sub_lat_deg));
+                        }
+                    }
+                    app.cached_trail = Some((now, name.clone(), trail));
+                }
+            }
+        }
+    }
+
     let map = Map::new(Some(tiles), &mut app.map_memory, Position::new(0.0, 0.0)).with_plugin(
         SatellitesPlugin {
             satellites: &app.satellites,
@@ -244,6 +271,7 @@ pub fn render_map(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
             show_orbital_trail: app.show_orbital_trail,
             swath_color: app.swath_color,
             swath_opacity: app.swath_opacity,
+            cached_trail: &app.cached_trail,
         },
     );
 

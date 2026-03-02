@@ -125,6 +125,12 @@ pub struct OrbitSenseApp {
     pub sort_alpha: bool,
     /// Set to true for one frame to move keyboard focus to the filter box.
     pub focus_filter: bool,
+    /// Caches the heavy SGP4 math for the selected satellite's orbital trail. (time, name, trail)
+    pub cached_trail: Option<(
+        chrono::DateTime<chrono::Utc>,
+        String,
+        Vec<walkers::Position>,
+    )>,
 }
 
 impl OrbitSenseApp {
@@ -191,6 +197,7 @@ impl OrbitSenseApp {
             location_error_msg: None,
             sort_alpha: true,
             focus_filter: false,
+            cached_trail: None,
         };
 
         // ------ Restore persisted settings ------
@@ -252,6 +259,9 @@ impl OrbitSenseApp {
     }
     /// Update the currently focused satellite and trigger an asynchronous `trigger_pass_prediction()` calculation.
     pub fn set_selected_satellite(&mut self, name: Option<String>) {
+        if self.selected_satellite != name {
+            self.cached_trail = None; // Invalidate cache on change
+        }
         self.selected_satellite = name;
         self.trigger_pass_prediction();
     }
@@ -275,39 +285,12 @@ impl OrbitSenseApp {
                 let alt_a = self
                     .satellites
                     .get(a)
-                    .and_then(|s| {
-                        crate::location::calculate_observation(
-                            &s.elements,
-                            &s.constants,
-                            &crate::location::Location {
-                                name: String::new(),
-                                lat_deg: 0.0,
-                                lon_deg: 0.0,
-                                alt_m: 0.0,
-                            },
-                            chrono::Utc::now(),
-                        )
-                        .map(|obs| obs.altitude_km)
-                    })
+                    .map(|s| s.cached_altitude)
                     .unwrap_or(0.0);
-
                 let alt_b = self
                     .satellites
                     .get(b)
-                    .and_then(|s| {
-                        crate::location::calculate_observation(
-                            &s.elements,
-                            &s.constants,
-                            &crate::location::Location {
-                                name: String::new(),
-                                lat_deg: 0.0,
-                                lon_deg: 0.0,
-                                alt_m: 0.0,
-                            },
-                            chrono::Utc::now(),
-                        )
-                        .map(|obs| obs.altitude_km)
-                    })
+                    .map(|s| s.cached_altitude)
                     .unwrap_or(0.0);
 
                 alt_a
