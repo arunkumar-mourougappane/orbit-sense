@@ -98,6 +98,7 @@ pub struct OrbitSenseApp {
     // UI state
     pub show_satellite_info: bool,
     pub preferences_open: bool,
+    pub show_about: bool,
     pub show_orbital_trail: bool,
     pub camera_locked: bool,
     pub pass_threshold_km: f64,
@@ -163,6 +164,7 @@ impl OrbitSenseApp {
             last_predicted_passes: Vec::new(),
             show_satellite_info: false,
             preferences_open: false,
+            show_about: false,
             show_orbital_trail: true,
             camera_locked: false,
             pass_threshold_km: crate::constants::DEFAULT_PASS_THRESHOLD_KM,
@@ -319,9 +321,16 @@ impl eframe::App for OrbitSenseApp {
                 ui.menu_button("File", |ui| {
                     if ui.button("Preferences").clicked() {
                         self.preferences_open = !self.preferences_open;
+                        ui.close();
                     }
                     if ui.button("Quit").clicked() {
                         std::process::exit(0);
+                    }
+                });
+                ui.menu_button("Help", |ui| {
+                    if ui.button("About").clicked() {
+                        self.show_about = true;
+                        ui.close();
                     }
                 });
             });
@@ -340,6 +349,7 @@ impl eframe::App for OrbitSenseApp {
         crate::ui::render_map_controls(self, ctx);
         crate::ui::render_satellite_info(self, ctx);
         crate::ui::render_preferences_window(self, ctx);
+        crate::ui::about::render_about_window(self, ctx);
     }
 
     /// eframe calls this periodically to auto-save application state to disk.

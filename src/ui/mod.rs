@@ -1,3 +1,4 @@
+pub mod about;
 pub mod map;
 pub mod overlay;
 pub mod preferences;
