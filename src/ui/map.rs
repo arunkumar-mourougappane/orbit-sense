@@ -64,10 +64,10 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
 
             if h > 50.0 {
                 let theta = (r_earth / (r_earth + h)).acos();
-                let num_points = 36;
-                let mut swath_points = Vec::with_capacity(num_points);
+                let num_points = 72; // More points = smoother ring
+                let mut swath_points = Vec::with_capacity(num_points + 1);
 
-                for i in 0..num_points {
+                for i in 0..=num_points {
                     let angle = (i as f64) * 2.0 * std::f64::consts::PI / (num_points as f64);
                     let lat_rad = obs.elevation_deg.to_radians();
                     let lon_rad = obs.azimuth_deg.to_radians();
@@ -90,29 +90,45 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
                     swath_points.push(p.to_pos2());
                 }
 
-                let mut valid_polygon = true;
-                for i in 1..swath_points.len() {
-                    if (swath_points[i].x - swath_points[i - 1].x).abs()
-                        > ui.clip_rect().width() / 2.0
-                    {
-                        valid_polygon = false;
-                        break;
-                    }
-                }
+                let r = (self.swath_color[0] * 255.0) as u8;
+                let g = (self.swath_color[1] * 255.0) as u8;
+                let b = (self.swath_color[2] * 255.0) as u8;
+                let a = (self.swath_opacity * 255.0) as u8;
+                let fill_color = Color32::from_rgba_unmultiplied(r, g, b, a);
+                let border_color = Color32::from_rgba_premultiplied(r, g, b, a.saturating_add(60));
+                let half_w = ui.clip_rect().width() / 2.0;
 
-                if valid_polygon {
-                    let r = (self.swath_color[0] * 255.0) as u8;
-                    let g = (self.swath_color[1] * 255.0) as u8;
-                    let b = (self.swath_color[2] * 255.0) as u8;
-                    let a = (self.swath_opacity * 255.0) as u8;
-                    let fill_color = Color32::from_rgba_unmultiplied(r, g, b, a);
-                    let stroke =
-                        Stroke::new(1.0, Color32::from_rgba_premultiplied(255, 255, 255, 100));
+                // Check if the footprint polygon straddles the antimeridian (large screen-space jump)
+                let has_antimeridian_crossing = swath_points
+                    .windows(2)
+                    .any(|w| (w[1].x - w[0].x).abs() > half_w);
+
+                if !has_antimeridian_crossing {
+                    // Common case: draw as a filled convex polygon
+                    let stroke = Stroke::new(1.0, border_color);
                     painter.add(egui::Shape::convex_polygon(
-                        swath_points,
+                        swath_points[..num_points].to_vec(),
                         fill_color,
                         stroke,
                     ));
+                } else {
+                    // Polar/antimeridian case: skip wrapping segments and draw the outline in
+                    // continuous arcs, then fall back to a screen-space circle on the marker.
+                    let sat_screen = projector.project(pos).to_pos2();
+                    // Approximate screen radius from the half-angle theta at current zoom
+                    let edge_screen = projector
+                        .project(Position::new(
+                            obs.azimuth_deg + theta.to_degrees(),
+                            obs.elevation_deg,
+                        ))
+                        .to_pos2();
+                    let radius = (edge_screen.x - sat_screen.x).abs().max(10.0);
+                    painter.circle(
+                        sat_screen,
+                        radius,
+                        fill_color,
+                        Stroke::new(1.0, border_color),
+                    );
                 }
             }
 

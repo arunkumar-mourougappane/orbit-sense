@@ -2,8 +2,7 @@
 
 use egui;
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::runtime::Runtime;
+use tokio::runtime::Handle;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
 use crate::location::Location;
@@ -78,7 +77,7 @@ pub struct OrbitSenseApp {
     pub map_memory: MapMemory,
     pub tiles_osm: HttpTiles,
     pub tiles_carto: HttpTiles,
-    pub rt: Arc<Runtime>,
+    pub rt: Handle,
 
     // Async communications
     pub tx: Sender<AppMessage>,
@@ -143,7 +142,7 @@ impl OrbitSenseApp {
             map_memory: initial_map_memory,
             tiles_osm,
             tiles_carto,
-            rt: Arc::new(Runtime::new().unwrap()),
+            rt: Handle::current(),
             tx,
             rx,
             fetch_in_progress: false,
