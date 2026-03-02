@@ -117,7 +117,10 @@ pub struct OrbitSenseApp {
     pub fetch_in_progress: bool,
     pub location_in_progress: bool,
     pub is_predicting_pass: bool,
+    /// Error from the last satellite TLE download attempt.
     pub error_msg: Option<String>,
+    /// Error from the last Observer Location geocoding attempt.
+    pub location_error_msg: Option<String>,
 }
 
 impl OrbitSenseApp {
@@ -181,6 +184,7 @@ impl OrbitSenseApp {
             location_in_progress: false,
             is_predicting_pass: false,
             error_msg: None,
+            location_error_msg: None,
         };
 
         // ------ Restore persisted settings ------
@@ -302,12 +306,12 @@ impl eframe::App for OrbitSenseApp {
                 AppMessage::LocationGeocoded(Ok(loc)) => {
                     self.observer = Some(loc);
                     self.location_in_progress = false;
-                    self.error_msg = None;
+                    self.location_error_msg = None;
                     self.trigger_pass_prediction();
                 }
                 AppMessage::LocationGeocoded(Err(e)) => {
                     self.location_in_progress = false;
-                    self.error_msg = Some(e);
+                    self.location_error_msg = Some(e);
                 }
                 AppMessage::PassPredicted(pass) => {
                     self.last_predicted_passes = pass;

@@ -17,6 +17,7 @@ pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
 
         if ui.button("Search Location").clicked() && !app.location_in_progress {
             app.location_in_progress = true;
+            app.location_error_msg = None; // clear stale error on new search
             let query = app.location_query.clone();
             let tx = app.tx.clone();
 
@@ -38,6 +39,10 @@ pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
                 "📍 {} — {:.2}°N {:.2}°E",
                 obs.name, obs.lat_deg, obs.lon_deg
             ));
+        }
+
+        if let Some(err) = &app.location_error_msg {
+            ui.colored_label(egui::Color32::from_rgb(255, 80, 80), format!("⚠ {err}"));
         }
     });
 
