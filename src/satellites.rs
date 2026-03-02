@@ -121,7 +121,7 @@ impl SatelliteCategory {
             Self::OneWeb => "https://celestrak.org/NORAD/elements/gp.php?GROUP=oneweb&FORMAT=tle",
             Self::Kuiper => "https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=tle",
             Self::AstSpaceMobile => {
-                "https://celestrak.org/NORAD/elements/gp.php?NAME=BLUEBIRD&FORMAT=tle"
+                "https://celestrak.org/NORAD/elements/gp.php?NAME=BLUEWALKER&FORMAT=tle"
             }
             Self::Planet => "https://celestrak.org/NORAD/elements/gp.php?GROUP=planet&FORMAT=tle",
             Self::Spire => "https://celestrak.org/NORAD/elements/gp.php?GROUP=spire&FORMAT=tle",
@@ -153,7 +153,7 @@ impl SatelliteCategory {
             Self::Starlink => "Starlink",
             Self::OneWeb => "OneWeb",
             Self::Kuiper => "Amazon Kuiper",
-            Self::AstSpaceMobile => "AST SpaceMobile (BlueBird)",
+            Self::AstSpaceMobile => "AST SpaceMobile (BlueWalker-3)",
             Self::Planet => "Planet Labs",
             Self::Spire => "Spire Global",
         }
