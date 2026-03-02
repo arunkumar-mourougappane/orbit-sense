@@ -10,6 +10,7 @@ use crate::satellites::{SpaceObject, fetch_active_satellites};
 
 /// Messages passed from background asynchronous tasks back to the UI thread.
 use walkers::{HttpOptions, HttpTiles, MapMemory, Position};
+/// Messages passed from background asynchronous tasks back to the UI thread.
 pub enum AppMessage {
     /// Received a payload containing the successfully parsed Celestrak dataset, or an error.
     SatellitesLoaded(Result<HashMap<String, SpaceObject>, String>),

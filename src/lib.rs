@@ -26,4 +26,5 @@ pub mod app;
 pub mod constants;
 pub mod location;
 pub mod satellites;
+/// UI module containing all egui interface windows and map rendering logic.
 pub mod ui;

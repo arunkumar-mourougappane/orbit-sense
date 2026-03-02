@@ -16,7 +16,7 @@ pub fn render_map_controls(app: &mut OrbitSenseApp, ctx: &egui::Context) {
         .collapsible(false)
         .resizable(false)
         .title_bar(false) // Hides the title bar to save space
-        .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-10.0, -10.0))
+        .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-10.0, -40.0))
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui
