@@ -3,8 +3,6 @@
 
 use crate::app::OrbitSenseApp;
 use crate::location::{Location, calculate_observation};
-use crate::satellites::SpaceObject;
-use chrono::Utc;
 use egui::{Color32, Stroke};
 use walkers::{Map, Position};
 
@@ -29,7 +27,6 @@ fn altitude_color(altitude_km: f64) -> Color32 {
 /// - The observer's location as a pin marker
 /// - A hover tooltip showing the name and altitude of the satellite under the cursor
 struct SatellitesPlugin<'a> {
-    satellites: &'a std::collections::HashMap<String, SpaceObject>,
     selected_satellite: &'a Option<String>,
     observer: &'a Option<crate::location::Location>,
     show_orbital_trail: bool,
@@ -45,6 +42,7 @@ struct SatellitesPlugin<'a> {
         String,
         Vec<walkers::Position>,
     )>,
+    current_observation: &'a Option<crate::location::Observation>,
 }
 
 impl walkers::Plugin for SatellitesPlugin<'_> {
@@ -56,7 +54,6 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
         _map_memory: &walkers::MapMemory,
     ) {
         let painter = ui.painter();
-        let now = Utc::now();
 
         // ── Observer pin ─────────────────────────────────────────────────────
         if let Some(obs) = self.observer {
@@ -76,18 +73,7 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
 
         // ── Selected satellite — detailed rendering ──────────────────────────
         if let Some(name) = self.selected_satellite
-            && let Some(sat) = self.satellites.get(name)
-            && let Some(obs) = calculate_observation(
-                &sat.elements,
-                &sat.constants,
-                &Location {
-                    name: String::new(),
-                    lat_deg: 0.0,
-                    lon_deg: 0.0,
-                    alt_m: 0.0,
-                },
-                now,
-            )
+            && let Some(obs) = self.current_observation
         {
             let pos = Position::new(obs.sub_lon_deg, obs.sub_lat_deg);
             let screen_pos = projector.project(pos).to_pos2();
@@ -221,19 +207,7 @@ pub fn render_map(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
 
     // Camera lock: follow the selected satellite
     if app.camera_locked
-        && let Some(name) = &app.selected_satellite.clone()
-        && let Some(sat) = app.satellites.get(name)
-        && let Some(obs) = calculate_observation(
-            &sat.elements,
-            &sat.constants,
-            &Location {
-                name: String::new(),
-                lat_deg: 0.0,
-                lon_deg: 0.0,
-                alt_m: 0.0,
-            },
-            chrono::Utc::now(),
-        )
+        && let Some(obs) = &app.current_observation
     {
         app.map_memory
             .center_at(Position::new(obs.sub_lon_deg, obs.sub_lat_deg));
@@ -276,7 +250,7 @@ pub fn render_map(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
         }
     }
     if let Some(name) = &app.selected_satellite
-        && let Some(sat) = app.satellites.get(name)
+        && let Some(_sat) = app.satellites.get(name)
     {
         let now = chrono::Utc::now();
         let needs_swath_update = match &app.cached_swath {
@@ -284,19 +258,7 @@ pub fn render_map(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
             Some((time, cached_name, _)) => cached_name != name || (now - *time).num_seconds() > 60,
         };
 
-        if needs_swath_update
-            && let Some(obs) = calculate_observation(
-                &sat.elements,
-                &sat.constants,
-                &Location {
-                    name: String::new(),
-                    lat_deg: 0.0,
-                    lon_deg: 0.0,
-                    alt_m: 0.0,
-                },
-                now,
-            )
-        {
+        if needs_swath_update && let Some(obs) = &app.current_observation {
             let r_earth = crate::constants::EARTH_RADIUS_KM;
             let h = obs.altitude_km.max(0.1);
             if h > 50.0 {
@@ -332,7 +294,6 @@ pub fn render_map(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
 
     let map = Map::new(Some(tiles), &mut app.map_memory, Position::new(0.0, 0.0)).with_plugin(
         SatellitesPlugin {
-            satellites: &app.satellites,
             selected_satellite: &app.selected_satellite,
             observer: &app.observer,
             show_orbital_trail: app.show_orbital_trail,
@@ -340,11 +301,13 @@ pub fn render_map(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
             swath_opacity: app.swath_opacity,
             cached_trail: &app.cached_trail,
             cached_swath: &app.cached_swath,
+            current_observation: &app.current_observation,
         },
     );
 
     let _response = ui.add(map);
 
-    // Continuous repaint for real-time satellite tracking
-    ui.ctx().request_repaint();
+    // Repaint to 30 FPS to reduce SGP4 and map tile overhead dynamically
+    ui.ctx()
+        .request_repaint_after(std::time::Duration::from_millis(33));
 }

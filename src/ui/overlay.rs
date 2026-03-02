@@ -118,17 +118,7 @@ pub fn render_satellite_info(app: &mut OrbitSenseApp, ctx: &egui::Context) {
         .show(ctx, |ui| {
             ui.heading("Spacecraft Details");
 
-            if let Some(obs) = crate::location::calculate_observation(
-                &sat.elements,
-                &sat.constants,
-                &crate::location::Location {
-                    name: "".to_string(),
-                    lat_deg: 0.0,
-                    lon_deg: 0.0,
-                    alt_m: 0.0,
-                },
-                chrono::Utc::now(),
-            ) {
+            if let Some(obs) = &app.current_observation {
                 ui.label(format!("Altitude:      {:.1} km", obs.altitude_km));
                 ui.label(format!("Velocity:      {:.2} km/s", obs.velocity_km_s));
                 ui.label(format!("Latitude (sub-sat):  {:.4}°", obs.sub_lat_deg));
@@ -185,6 +175,6 @@ pub fn render_satellite_info(app: &mut OrbitSenseApp, ctx: &egui::Context) {
 
     app.show_satellite_info = open;
     if open {
-        ctx.request_repaint();
+        ctx.request_repaint_after(std::time::Duration::from_millis(33));
     }
 }

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
-use crate::location::Location;
+use crate::location::{Location, Observation};
 use crate::satellites::{SpaceObject, fetch_active_satellites};
 
 /// Messages passed from background asynchronous tasks back to the UI thread.
@@ -137,6 +137,8 @@ pub struct OrbitSenseApp {
         String,
         Vec<walkers::Position>,
     )>,
+    /// Per-frame calculation of the selected satellite's exact position to feed `map.rs` and `overlay.rs`.
+    pub current_observation: Option<Observation>,
 }
 
 impl OrbitSenseApp {
@@ -205,6 +207,7 @@ impl OrbitSenseApp {
             focus_filter: false,
             cached_trail: None,
             cached_swath: None,
+            current_observation: None,
         };
 
         // ------ Restore persisted settings ------
@@ -340,6 +343,30 @@ impl eframe::App for OrbitSenseApp {
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.selected_satellite = None;
         }
+
+        // Calculate single Observation payload per-frame instead of letting UI functions duplicate it
+        self.current_observation = {
+            if let Some(name) = &self.selected_satellite {
+                if let Some(sat) = self.satellites.get(name) {
+                    crate::location::calculate_observation(
+                        &sat.elements,
+                        &sat.constants,
+                        &crate::location::Location {
+                            name: String::new(),
+                            lat_deg: 0.0,
+                            lon_deg: 0.0,
+                            alt_m: 0.0,
+                        },
+                        chrono::Utc::now(),
+                    )
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+
         if ctx.input(|i| i.key_pressed(egui::Key::R)) && !self.fetch_in_progress {
             self.fetch_in_progress = true;
             let tx = self.tx.clone();
