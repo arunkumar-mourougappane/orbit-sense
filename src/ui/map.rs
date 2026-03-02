@@ -153,36 +153,12 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
                     let border_color =
                         Color32::from_rgba_premultiplied(r, g, b, a.saturating_add(60));
 
-                    let half_w = ui.clip_rect().width() / 2.0;
-                    let has_antimeridian_crossing = drawn_swath_points
-                        .windows(2)
-                        .any(|w| (w[1].x - w[0].x).abs() > half_w);
-
-                    if !has_antimeridian_crossing {
-                        let stroke = Stroke::new(1.0, border_color);
-                        painter.add(egui::Shape::convex_polygon(
-                            drawn_swath_points,
-                            fill_color,
-                            stroke,
-                        ));
-                    } else {
-                        let r_earth = crate::constants::EARTH_RADIUS_KM;
-                        let h = obs.altitude_km.max(0.1);
-                        let theta = (r_earth / (r_earth + h)).acos();
-                        let edge_screen = projector
-                            .project(Position::new(
-                                obs.sub_lon_deg + theta.to_degrees() + lon_offset,
-                                obs.sub_lat_deg,
-                            ))
-                            .to_pos2();
-                        let radius = (edge_screen.x - screen_pos.x).abs().max(10.0);
-                        painter.circle(
-                            screen_pos,
-                            radius,
-                            fill_color,
-                            Stroke::new(1.0, border_color),
-                        );
-                    }
+                    let stroke = Stroke::new(1.0, border_color);
+                    painter.add(egui::Shape::convex_polygon(
+                        drawn_swath_points,
+                        fill_color,
+                        stroke,
+                    ));
                 }
 
                 // ── Orbital trail ─────────────────────────────────────────
