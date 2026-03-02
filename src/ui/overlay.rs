@@ -19,47 +19,47 @@ pub fn render_map_controls(app: &mut OrbitSenseApp, ctx: &egui::Context) {
         .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-10.0, -10.0))
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
-                    if ui
-                        .add_sized([30.0, 30.0], egui::Button::new("➕"))
-                        .on_hover_text("Zoom In")
-                        .clicked()
-                    {
-                        let _ = app.map_memory.zoom_in();
+                if ui
+                    .add_sized([30.0, 30.0], egui::Button::new("➕"))
+                    .on_hover_text("Zoom In")
+                    .clicked()
+                {
+                    let _ = app.map_memory.zoom_in();
+                }
+                if ui
+                    .add_sized([30.0, 30.0], egui::Button::new("➖"))
+                    .on_hover_text("Zoom Out")
+                    .clicked()
+                {
+                    let _ = app.map_memory.zoom_out();
+                }
+                if ui
+                    .add_sized([30.0, 30.0], egui::Button::new("🌐"))
+                    .on_hover_text("Max Zoomout")
+                    .clicked()
+                {
+                    let _ = app.map_memory.set_zoom(2.5);
+                }
+                if ui
+                    .add_sized([30.0, 30.0], egui::Button::new("🗺"))
+                    .on_hover_text("Fit to Window")
+                    .clicked()
+                {
+                    app.map_memory.center_at(walkers::Position::new(0.0, 0.0));
+                    let _ = app.map_memory.set_zoom(2.5);
+                }
+                if ui
+                    .add_sized([30.0, 30.0], egui::Button::new("📍"))
+                    .on_hover_text("Center on Observer")
+                    .clicked()
+                {
+                    if let Some(obs) = &app.observer {
+                        app.map_memory
+                            .center_at(walkers::Position::new(obs.lon_deg, obs.lat_deg));
+                    } else {
+                        app.map_memory.center_at(walkers::Position::new(0.0, 20.0));
                     }
-                    if ui
-                        .add_sized([30.0, 30.0], egui::Button::new("➖"))
-                        .on_hover_text("Zoom Out")
-                        .clicked()
-                    {
-                        let _ = app.map_memory.zoom_out();
-                    }
-                    if ui
-                        .add_sized([30.0, 30.0], egui::Button::new("🌐"))
-                        .on_hover_text("Max Zoomout")
-                        .clicked()
-                    {
-                        let _ = app.map_memory.set_zoom(2.5);
-                    }
-                    if ui
-                        .add_sized([30.0, 30.0], egui::Button::new("🗺"))
-                        .on_hover_text("Fit to Window")
-                        .clicked()
-                    {
-                        app.map_memory.center_at(walkers::Position::new(0.0, 0.0));
-                        let _ = app.map_memory.set_zoom(2.5);
-                    }
-                    if ui
-                        .add_sized([30.0, 30.0], egui::Button::new("📍"))
-                        .on_hover_text("Center on Observer")
-                        .clicked()
-                    {
-                        if let Some(obs) = &app.observer {
-                            app.map_memory
-                                .center_at(walkers::Position::new(obs.lon_deg, obs.lat_deg));
-                        } else {
-                            app.map_memory.center_at(walkers::Position::new(0.0, 20.0));
-                        }
-                    }
+                }
 
                 let lock_icon = if app.camera_locked { "🔒" } else { "🔓" };
                 let lock_hover = if app.camera_locked {
@@ -111,7 +111,7 @@ pub fn render_satellite_info(app: &mut OrbitSenseApp, ctx: &egui::Context) {
         .collapsible(false)
         .show(ctx, |ui| {
             ui.heading("Spacecraft Details");
-            
+
             if let Some(obs) = crate::location::calculate_observation(
                 &sat.elements,
                 &sat.constants,
@@ -143,7 +143,7 @@ pub fn render_satellite_info(app: &mut OrbitSenseApp, ctx: &egui::Context) {
             ui.label(format!("Mean Motion: {:.4} rev/day", sat.elements.mean_motion));
             ui.label(format!("Revolution # (Epoch): {}", sat.elements.revolution_number));
             ui.label(format!("BSTAR Drag Term: {:.6}", sat.elements.drag_term));
-            
+
             ui.separator();
             ui.heading("Upcoming Passes (48h)");
 
@@ -153,7 +153,7 @@ pub fn render_satellite_info(app: &mut OrbitSenseApp, ctx: &egui::Context) {
                         for (time, dist) in &app.last_predicted_passes {
                             let local_time: chrono::DateTime<chrono::Local> = (*time).into();
                             ui.label(format!("Starts: {}", local_time.format("%Y-%m-%d %H:%M:%S")));
-                            
+
                             // Visual color hint for direct vs low horizon passes
                             let color = if *dist < app.pass_threshold_km / 2.0 {
                                 egui::Color32::from_rgb(100, 255, 100) // Direct/Green

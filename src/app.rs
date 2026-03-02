@@ -249,7 +249,7 @@ impl eframe::App for OrbitSenseApp {
         }
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("File", |ui| {
                     if ui.button("Preferences").clicked() {
                         self.preferences_open = !self.preferences_open;
