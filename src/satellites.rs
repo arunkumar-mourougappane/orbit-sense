@@ -68,6 +68,8 @@ pub enum SatelliteCategory {
     OneWeb,
     /// Amazon Kuiper broadband constellation (where available).
     Kuiper,
+    /// AST SpaceMobile BlueBird direct-to-device broadband satellites.
+    AstSpaceMobile,
 
     // ── Earth Observation ────────────────────────────────────────────────────
     /// Planet Labs Dove and SuperDove imaging cubesats.
@@ -118,6 +120,9 @@ impl SatelliteCategory {
             }
             Self::OneWeb => "https://celestrak.org/NORAD/elements/gp.php?GROUP=oneweb&FORMAT=tle",
             Self::Kuiper => "https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=tle",
+            Self::AstSpaceMobile => {
+                "https://celestrak.org/NORAD/elements/gp.php?NAME=BLUEBIRD&FORMAT=tle"
+            }
             Self::Planet => "https://celestrak.org/NORAD/elements/gp.php?GROUP=planet&FORMAT=tle",
             Self::Spire => "https://celestrak.org/NORAD/elements/gp.php?GROUP=spire&FORMAT=tle",
         }
@@ -148,6 +153,7 @@ impl SatelliteCategory {
             Self::Starlink => "Starlink",
             Self::OneWeb => "OneWeb",
             Self::Kuiper => "Amazon Kuiper",
+            Self::AstSpaceMobile => "AST SpaceMobile (BlueBird)",
             Self::Planet => "Planet Labs",
             Self::Spire => "Spire Global",
         }
@@ -174,7 +180,9 @@ impl SatelliteCategory {
             | Self::Ses
             | Self::Telesat
             | Self::O3b => "Commercial Telecom",
-            Self::Starlink | Self::OneWeb | Self::Kuiper => "Broadband Constellations",
+            Self::Starlink | Self::OneWeb | Self::Kuiper | Self::AstSpaceMobile => {
+                "Broadband Constellations"
+            }
             Self::Planet | Self::Spire => "Earth Observation",
         }
     }
@@ -208,6 +216,7 @@ impl SatelliteCategory {
             Self::Starlink,
             Self::OneWeb,
             Self::Kuiper,
+            Self::AstSpaceMobile,
             // Earth Observation
             Self::Planet,
             Self::Spire,
