@@ -121,6 +121,10 @@ pub struct OrbitSenseApp {
     pub error_msg: Option<String>,
     /// Error from the last Observer Location geocoding attempt.
     pub location_error_msg: Option<String>,
+    /// If true, satellite list is sorted alphabetically (default). If false, sorted by altitude descending.
+    pub sort_alpha: bool,
+    /// Set to true for one frame to move keyboard focus to the filter box.
+    pub focus_filter: bool,
 }
 
 impl OrbitSenseApp {
@@ -185,6 +189,8 @@ impl OrbitSenseApp {
             is_predicting_pass: false,
             error_msg: None,
             location_error_msg: None,
+            sort_alpha: true,
+            focus_filter: false,
         };
 
         // ------ Restore persisted settings ------
@@ -259,7 +265,57 @@ impl OrbitSenseApp {
             .filter(|k| k.to_lowercase().contains(&query))
             .cloned()
             .collect();
-        keys.sort();
+
+        if self.sort_alpha {
+            keys.sort();
+        } else {
+            // Sort by altitude (descending or ascending)
+            // It's better to sort by altitude ascending (lowest first)
+            keys.sort_by(|a, b| {
+                let alt_a = self
+                    .satellites
+                    .get(a)
+                    .and_then(|s| {
+                        crate::location::calculate_observation(
+                            &s.elements,
+                            &s.constants,
+                            &crate::location::Location {
+                                name: String::new(),
+                                lat_deg: 0.0,
+                                lon_deg: 0.0,
+                                alt_m: 0.0,
+                            },
+                            chrono::Utc::now(),
+                        )
+                        .map(|obs| obs.altitude_km)
+                    })
+                    .unwrap_or(0.0);
+
+                let alt_b = self
+                    .satellites
+                    .get(b)
+                    .and_then(|s| {
+                        crate::location::calculate_observation(
+                            &s.elements,
+                            &s.constants,
+                            &crate::location::Location {
+                                name: String::new(),
+                                lat_deg: 0.0,
+                                lon_deg: 0.0,
+                                alt_m: 0.0,
+                            },
+                            chrono::Utc::now(),
+                        )
+                        .map(|obs| obs.altitude_km)
+                    })
+                    .unwrap_or(0.0);
+
+                alt_a
+                    .partial_cmp(&alt_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+        }
+
         self.filtered_satellites = keys;
     }
 
@@ -289,6 +345,26 @@ impl OrbitSenseApp {
 
 impl eframe::App for OrbitSenseApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // --- Global Keyboard Shortcuts ---
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.selected_satellite = None;
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::R)) && !self.fetch_in_progress {
+            self.fetch_in_progress = true;
+            let tx = self.tx.clone();
+            let category = self.satellite_category;
+
+            self.rt.spawn(async move {
+                let res = crate::satellites::fetch_active_satellites(category)
+                    .await
+                    .map_err(|e| e.to_string());
+                let _ = tx.send(AppMessage::SatellitesLoaded(res)).await;
+            });
+        }
+        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::F)) {
+            self.focus_filter = true;
+        }
+
         // Process messages from async tasks
         while let Ok(msg) = self.rx.try_recv() {
             match msg {
@@ -347,6 +423,47 @@ impl eframe::App for OrbitSenseApp {
             .show(ctx, |ui| {
                 crate::ui::render_sidebar(self, ui);
             });
+
+        egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(
+                        chrono::Utc::now()
+                            .format("%Y-%m-%d %H:%M:%S UTC")
+                            .to_string(),
+                    )
+                    .monospace()
+                    .color(egui::Color32::from_rgb(180, 180, 180)),
+                );
+                ui.separator();
+
+                let sat_count = self.satellites.len();
+                ui.label(format!(
+                    "{} Satellites loaded ({})",
+                    sat_count,
+                    self.satellite_category.name()
+                ));
+
+                if let Some(last) = &self.last_updated {
+                    ui.separator();
+                    let age_mins = (chrono::Local::now() - *last).num_minutes();
+                    let color = if age_mins < 120 {
+                        egui::Color32::from_rgb(100, 255, 100) // Green = fresh (< 2hr)
+                    } else if age_mins < 1440 {
+                        egui::Color32::from_rgb(255, 200, 50) // Orange = stale (< 24hr)
+                    } else {
+                        egui::Color32::from_rgb(255, 100, 100) // Red = old
+                    };
+                    ui.colored_label(color, format!("TLEs updated {}m ago", age_mins));
+                }
+
+                if let Some(obs) = &self.observer {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(format!("📍 {}", obs.name));
+                    });
+                }
+            });
+        });
 
         egui::CentralPanel::default()
             .frame(egui::Frame::central_panel(&ctx.style()).inner_margin(0.0))

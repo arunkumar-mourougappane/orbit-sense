@@ -85,8 +85,8 @@ pub async fn predict_next_pass(
                 let dist = haversine_distance(
                     obs.lat_deg,
                     obs.lon_deg,
-                    pass_obs.elevation_deg,
-                    pass_obs.azimuth_deg,
+                    pass_obs.sub_lat_deg,
+                    pass_obs.sub_lon_deg,
                 );
 
                 if dist < threshold_km {
@@ -113,16 +113,20 @@ pub async fn predict_next_pass(
     .unwrap_or_default()
 }
 
-/// A simplified observation at a specific time
+/// The computed geodetic position of a satellite at a specific time.
 #[derive(Debug, Clone)]
 pub struct Observation {
     #[allow(dead_code)]
     pub time: DateTime<Utc>,
-    pub elevation_deg: f64,
-    pub azimuth_deg: f64,
+    /// Sub-satellite latitude — geodetic latitude of the point on Earth directly below the satellite.
+    pub sub_lat_deg: f64,
+    /// Sub-satellite longitude — geodetic longitude of the point on Earth directly below the satellite.
+    pub sub_lon_deg: f64,
     #[allow(dead_code)]
     pub range_km: f64,
+    /// Altitude above the WGS-84 ellipsoid surface, in kilometres.
     pub altitude_km: f64,
+    /// Magnitude of the velocity vector, in km/s.
     pub velocity_km_s: f64,
 }
 
@@ -195,8 +199,8 @@ pub fn calculate_observation(
 
     Some(Observation {
         time,
-        elevation_deg: lat_deg, // Repurposing these struct fields for passing visual tracking coordiantes to UI
-        azimuth_deg: lon_deg,
+        sub_lat_deg: lat_deg,
+        sub_lon_deg: lon_deg,
         range_km: p,
         altitude_km,
         velocity_km_s,

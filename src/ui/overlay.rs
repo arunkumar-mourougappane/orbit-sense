@@ -123,10 +123,10 @@ pub fn render_satellite_info(app: &mut OrbitSenseApp, ctx: &egui::Context) {
                 },
                 chrono::Utc::now(),
             ) {
-                ui.label(format!("Altitude: {:.1} km", obs.altitude_km));
-                ui.label(format!("Velocity: {:.2} km/s", obs.velocity_km_s));
-                ui.label(format!("Latitude: {:.4}°", obs.elevation_deg));
-                ui.label(format!("Longitude: {:.4}°", obs.azimuth_deg));
+                ui.label(format!("Altitude:      {:.1} km", obs.altitude_km));
+                ui.label(format!("Velocity:      {:.2} km/s", obs.velocity_km_s));
+                ui.label(format!("Latitude (sub-sat):  {:.4}°", obs.sub_lat_deg));
+                ui.label(format!("Longitude (sub-sat): {:.4}°", obs.sub_lon_deg));
                 ui.separator();
             }
 

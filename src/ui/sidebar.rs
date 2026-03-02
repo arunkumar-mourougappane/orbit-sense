@@ -12,10 +12,18 @@ pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
 
     ui.group(|ui| {
         ui.label("Observer Location");
-        ui.text_edit_singleline(&mut app.location_query)
+        let loc_response = ui
+            .text_edit_singleline(&mut app.location_query)
             .on_hover_text("Enter City, State (e.g. 'Houston, TX')");
 
-        if ui.button("Search Location").clicked() && !app.location_in_progress {
+        let enter_pressed =
+            loc_response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        let button_clicked = ui.button("Search Location").clicked();
+
+        if (button_clicked || enter_pressed)
+            && !app.location_in_progress
+            && !app.location_query.is_empty()
+        {
             app.location_in_progress = true;
             app.location_error_msg = None; // clear stale error on new search
             let query = app.location_query.clone();
@@ -134,14 +142,34 @@ pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
             ui.colored_label(egui::Color32::from_rgb(255, 80, 80), format!("⚠ {err}"));
         }
 
-        // Filter text box
-        if ui
-            .text_edit_singleline(&mut app.search_query)
-            .on_hover_text("Filter by name (e.g. 'ISS')")
-            .changed()
-        {
-            app.update_filtered_satellites();
-        }
+        // Filter text box and Sort toggle
+        ui.horizontal(|ui| {
+            let filter_response = ui
+                .text_edit_singleline(&mut app.search_query)
+                .on_hover_text("Filter by name (e.g. 'ISS')");
+
+            if app.focus_filter {
+                filter_response.request_focus();
+                app.focus_filter = false;
+            }
+
+            if filter_response.changed() {
+                app.update_filtered_satellites();
+            }
+
+            // Sort toggle button
+            let sort_icon = if app.sort_alpha { "🔤" } else { "↕" };
+            let sort_hover = if app.sort_alpha {
+                "Sort by Name"
+            } else {
+                "Sort by Altitude"
+            };
+
+            if ui.button(sort_icon).on_hover_text(sort_hover).clicked() {
+                app.sort_alpha = !app.sort_alpha;
+                app.update_filtered_satellites();
+            }
+        });
 
         if app.filtered_satellites.is_empty() && !app.search_query.is_empty() {
             ui.label(
