@@ -26,8 +26,14 @@ pub fn render_about_window(app: &mut OrbitSenseApp, ctx: &egui::Context) {
             ui.vertical_centered(|ui| {
                 // Title
                 ui.add_space(8.0);
+                ui.add(
+                    egui::Image::new(egui::include_image!("../../assets/icon.png"))
+                        .max_height(80.0)
+                        .corner_radius(8),
+                );
+                ui.add_space(4.0);
                 ui.label(
-                    egui::RichText::new("🛰  Orbit Sense")
+                    egui::RichText::new("Orbit Sense")
                         .size(26.0)
                         .strong()
                         .color(egui::Color32::from_rgb(100, 200, 255)),
