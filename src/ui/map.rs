@@ -6,7 +6,7 @@ use crate::constants::ORBITAL_TRAIL_MINUTES;
 use crate::location::{Location, calculate_observation};
 use crate::satellites::SpaceObject;
 use chrono::Utc;
-use egui::{Color32, Pos2, Stroke};
+use egui::{Color32, Stroke};
 use walkers::{Map, Position};
 
 // ── Altitude colour helpers ──────────────────────────────────────────────────
@@ -36,7 +36,6 @@ struct SatellitesPlugin<'a> {
     show_orbital_trail: bool,
     swath_color: [f32; 3],
     swath_opacity: f32,
-    cursor_pos: Option<Pos2>,
 }
 
 impl walkers::Plugin for SatellitesPlugin<'_> {
@@ -64,44 +63,6 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
                 egui::FontId::proportional(11.0),
                 Color32::from_rgb(50, 220, 100),
             );
-        }
-
-        // ── All constellation dots + hover tooltip ───────────────────────────
-        let mut tooltip: Option<(Pos2, String)> = None;
-
-        for (name, sat) in self.satellites {
-            if let Some(obs) = calculate_observation(
-                &sat.elements,
-                &sat.constants,
-                &Location {
-                    name: String::new(),
-                    lat_deg: 0.0,
-                    lon_deg: 0.0,
-                    alt_m: 0.0,
-                },
-                now,
-            ) {
-                let screen_pos = projector
-                    .project(Position::new(obs.sub_lon_deg, obs.sub_lat_deg))
-                    .to_pos2();
-
-                let is_selected = self.selected_satellite.as_deref() == Some(name.as_str());
-
-                if is_selected {
-                    // Selected satellite: larger white ring drawn below the detailed pass
-                    continue;
-                }
-
-                let dot_color = altitude_color(obs.altitude_km);
-                painter.circle_filled(screen_pos, 3.0, dot_color.gamma_multiply(0.75));
-
-                // Hover detection
-                if let Some(cursor) = self.cursor_pos
-                    && (screen_pos - cursor).length() < 8.0
-                {
-                    tooltip = Some((screen_pos, format!("{}\n{:.0} km", name, obs.altitude_km)));
-                }
-            }
         }
 
         // ── Selected satellite — detailed rendering ──────────────────────────
@@ -240,26 +201,6 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
                 }
             }
         }
-
-        // ── Hover tooltip (drawn last, on top) ───────────────────────────────
-        if let Some((pos, label)) = tooltip {
-            let rect = painter.text(
-                pos + egui::vec2(10.0, -14.0),
-                egui::Align2::LEFT_TOP,
-                &label,
-                egui::FontId::proportional(11.0),
-                Color32::WHITE,
-            );
-            painter.rect_filled(rect.expand(3.0), 2.0, Color32::from_black_alpha(180));
-            // Draw text again on top of the background rect
-            painter.text(
-                pos + egui::vec2(10.0, -14.0),
-                egui::Align2::LEFT_TOP,
-                &label,
-                egui::FontId::proportional(11.0),
-                Color32::WHITE,
-            );
-        }
     }
 }
 
@@ -290,24 +231,21 @@ pub fn render_map(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
             .center_at(Position::new(obs.sub_lon_deg, obs.sub_lat_deg));
     }
 
-    // Capture cursor position for hover tooltip
-    let cursor_pos = ui.input(|i| i.pointer.hover_pos());
-
     let tiles = match app.map_style {
         crate::app::MapStyle::OpenStreetMap => &mut app.tiles_osm,
         crate::app::MapStyle::CartoDark => &mut app.tiles_carto,
     };
 
-    let mut map = Map::new(Some(tiles), &mut app.map_memory, Position::new(0.0, 0.0));
-    map = map.with_plugin(SatellitesPlugin {
-        satellites: &app.satellites,
-        selected_satellite: &app.selected_satellite,
-        observer: &app.observer,
-        show_orbital_trail: app.show_orbital_trail,
-        swath_color: app.swath_color,
-        swath_opacity: app.swath_opacity,
-        cursor_pos,
-    });
+    let map = Map::new(Some(tiles), &mut app.map_memory, Position::new(0.0, 0.0)).with_plugin(
+        SatellitesPlugin {
+            satellites: &app.satellites,
+            selected_satellite: &app.selected_satellite,
+            observer: &app.observer,
+            show_orbital_trail: app.show_orbital_trail,
+            swath_color: app.swath_color,
+            swath_opacity: app.swath_opacity,
+        },
+    );
 
     let _response = ui.add(map);
 
