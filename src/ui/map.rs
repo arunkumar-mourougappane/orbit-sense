@@ -40,6 +40,11 @@ struct SatellitesPlugin<'a> {
         String,
         Vec<walkers::Position>,
     )>,
+    cached_swath: &'a Option<(
+        chrono::DateTime<chrono::Utc>,
+        String,
+        Vec<walkers::Position>,
+    )>,
 }
 
 impl walkers::Plugin for SatellitesPlugin<'_> {
@@ -102,39 +107,50 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
             );
 
             // ── Orbital footprint (swath) ─────────────────────────────
-            let r_earth = crate::constants::EARTH_RADIUS_KM;
-            let h = obs.altitude_km.max(0.1);
+            let mut drawn_swath_points = Vec::new();
 
-            if h > 50.0 {
-                let theta = (r_earth / (r_earth + h)).acos();
-                let num_points = 72;
-                let mut swath_points = Vec::with_capacity(num_points + 1);
-
-                for i in 0..=num_points {
-                    let angle = (i as f64) * 2.0 * std::f64::consts::PI / (num_points as f64);
-                    let lat_rad = obs.sub_lat_deg.to_radians();
-                    let lon_rad = obs.sub_lon_deg.to_radians();
-
-                    let point_lat = (lat_rad.sin() * theta.cos()
-                        + lat_rad.cos() * theta.sin() * angle.cos())
-                    .asin();
-                    let mut point_lon = lon_rad
-                        + (angle.sin() * theta.sin() * lat_rad.cos())
-                            .atan2(theta.cos() - lat_rad.sin() * point_lat.sin());
-
-                    point_lon = (point_lon + 3.0 * std::f64::consts::PI)
-                        % (2.0 * std::f64::consts::PI)
-                        - std::f64::consts::PI;
-
-                    let p = projector
-                        .project(Position::new(
-                            point_lon.to_degrees(),
-                            point_lat.to_degrees(),
-                        ))
-                        .to_pos2();
-                    swath_points.push(p);
+            if let Some((_, _, swath_pos)) = self.cached_swath {
+                for &pos in swath_pos {
+                    drawn_swath_points.push(projector.project(pos).to_pos2());
                 }
+            } else {
+                // Fallback (happens very briefly if cache isn't ready)
+                let r_earth = crate::constants::EARTH_RADIUS_KM;
+                let h = obs.altitude_km.max(0.1);
 
+                if h > 50.0 {
+                    let theta = (r_earth / (r_earth + h)).acos();
+                    let num_points = 72;
+                    drawn_swath_points.reserve(num_points + 1);
+
+                    for i in 0..=num_points {
+                        let angle = (i as f64) * 2.0 * std::f64::consts::PI / (num_points as f64);
+                        let lat_rad = obs.sub_lat_deg.to_radians();
+                        let lon_rad = obs.sub_lon_deg.to_radians();
+
+                        let point_lat = (lat_rad.sin() * theta.cos()
+                            + lat_rad.cos() * theta.sin() * angle.cos())
+                        .asin();
+                        let mut point_lon = lon_rad
+                            + (angle.sin() * theta.sin() * lat_rad.cos())
+                                .atan2(theta.cos() - lat_rad.sin() * point_lat.sin());
+
+                        point_lon = (point_lon + 3.0 * std::f64::consts::PI)
+                            % (2.0 * std::f64::consts::PI)
+                            - std::f64::consts::PI;
+
+                        let p = projector
+                            .project(Position::new(
+                                point_lon.to_degrees(),
+                                point_lat.to_degrees(),
+                            ))
+                            .to_pos2();
+                        drawn_swath_points.push(p);
+                    }
+                }
+            }
+
+            if !drawn_swath_points.is_empty() {
                 let r = (self.swath_color[0] * 255.0) as u8;
                 let g = (self.swath_color[1] * 255.0) as u8;
                 let b = (self.swath_color[2] * 255.0) as u8;
@@ -143,18 +159,21 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
                 let border_color = Color32::from_rgba_premultiplied(r, g, b, a.saturating_add(60));
 
                 let half_w = ui.clip_rect().width() / 2.0;
-                let has_antimeridian_crossing = swath_points
+                let has_antimeridian_crossing = drawn_swath_points
                     .windows(2)
                     .any(|w| (w[1].x - w[0].x).abs() > half_w);
 
                 if !has_antimeridian_crossing {
                     let stroke = Stroke::new(1.0, border_color);
                     painter.add(egui::Shape::convex_polygon(
-                        swath_points[..num_points].to_vec(),
+                        drawn_swath_points,
                         fill_color,
                         stroke,
                     ));
                 } else {
+                    let r_earth = crate::constants::EARTH_RADIUS_KM;
+                    let h = obs.altitude_km.max(0.1);
+                    let theta = (r_earth / (r_earth + h)).acos();
                     let edge_screen = projector
                         .project(Position::new(
                             obs.sub_lon_deg + theta.to_degrees(),
@@ -256,6 +275,60 @@ pub fn render_map(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
             app.cached_trail = Some((now, name.clone(), trail));
         }
     }
+    if let Some(name) = &app.selected_satellite
+        && let Some(sat) = app.satellites.get(name)
+    {
+        let now = chrono::Utc::now();
+        let needs_swath_update = match &app.cached_swath {
+            None => true,
+            Some((time, cached_name, _)) => cached_name != name || (now - *time).num_seconds() > 60,
+        };
+
+        if needs_swath_update
+            && let Some(obs) = calculate_observation(
+                &sat.elements,
+                &sat.constants,
+                &Location {
+                    name: String::new(),
+                    lat_deg: 0.0,
+                    lon_deg: 0.0,
+                    alt_m: 0.0,
+                },
+                now,
+            )
+        {
+            let r_earth = crate::constants::EARTH_RADIUS_KM;
+            let h = obs.altitude_km.max(0.1);
+            if h > 50.0 {
+                let theta = (r_earth / (r_earth + h)).acos();
+                let num_points = 72;
+                let mut swath_points = Vec::with_capacity(num_points + 1);
+
+                for i in 0..=num_points {
+                    let angle = (i as f64) * 2.0 * std::f64::consts::PI / (num_points as f64);
+                    let lat_rad = obs.sub_lat_deg.to_radians();
+                    let lon_rad = obs.sub_lon_deg.to_radians();
+
+                    let point_lat = (lat_rad.sin() * theta.cos()
+                        + lat_rad.cos() * theta.sin() * angle.cos())
+                    .asin();
+                    let mut point_lon = lon_rad
+                        + (angle.sin() * theta.sin() * lat_rad.cos())
+                            .atan2(theta.cos() - lat_rad.sin() * point_lat.sin());
+
+                    point_lon = (point_lon + 3.0 * std::f64::consts::PI)
+                        % (2.0 * std::f64::consts::PI)
+                        - std::f64::consts::PI;
+
+                    swath_points.push(Position::new(
+                        point_lon.to_degrees(),
+                        point_lat.to_degrees(),
+                    ));
+                }
+                app.cached_swath = Some((now, name.clone(), swath_points));
+            }
+        }
+    }
 
     let map = Map::new(Some(tiles), &mut app.map_memory, Position::new(0.0, 0.0)).with_plugin(
         SatellitesPlugin {
@@ -266,6 +339,7 @@ pub fn render_map(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
             swath_color: app.swath_color,
             swath_opacity: app.swath_opacity,
             cached_trail: &app.cached_trail,
+            cached_swath: &app.cached_swath,
         },
     );
 

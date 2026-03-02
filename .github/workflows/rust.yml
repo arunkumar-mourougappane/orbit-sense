@@ -19,15 +19,7 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libvulkan-dev
       
     - name: Cache cargo registry
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
+      uses: Swatinem/rust-cache@v2
 
     - name: Run clippy
       run: cargo clippy --all-targets --all-features -- -D warnings

@@ -131,6 +131,12 @@ pub struct OrbitSenseApp {
         String,
         Vec<walkers::Position>,
     )>,
+    /// Caches the mathematical calculation for the satellite swath.
+    pub cached_swath: Option<(
+        chrono::DateTime<chrono::Utc>,
+        String,
+        Vec<walkers::Position>,
+    )>,
 }
 
 impl OrbitSenseApp {
@@ -198,6 +204,7 @@ impl OrbitSenseApp {
             sort_alpha: true,
             focus_filter: false,
             cached_trail: None,
+            cached_swath: None,
         };
 
         // ------ Restore persisted settings ------
@@ -261,6 +268,7 @@ impl OrbitSenseApp {
     pub fn set_selected_satellite(&mut self, name: Option<String>) {
         if self.selected_satellite != name {
             self.cached_trail = None; // Invalidate cache on change
+            self.cached_swath = None;
         }
         self.selected_satellite = name;
         self.trigger_pass_prediction();
