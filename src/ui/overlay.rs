@@ -68,7 +68,10 @@ pub fn render_map_controls(app: &mut OrbitSenseApp, ctx: &egui::Context) {
                     "Auto-Track Satellite"
                 };
                 if ui
-                    .add_sized([30.0, 30.0], egui::Button::new(lock_icon))
+                    .add_sized(
+                        [30.0, 30.0],
+                        egui::Button::new(lock_icon).selected(app.camera_locked),
+                    )
                     .on_hover_text(lock_hover)
                     .clicked()
                 {
@@ -76,7 +79,10 @@ pub fn render_map_controls(app: &mut OrbitSenseApp, ctx: &egui::Context) {
                 }
 
                 if ui
-                    .add_sized([30.0, 30.0], egui::Button::new("ℹ"))
+                    .add_sized(
+                        [30.0, 30.0],
+                        egui::Button::new("ℹ").selected(app.show_satellite_info),
+                    )
                     .on_hover_text("Satellite Info")
                     .clicked()
                 {
