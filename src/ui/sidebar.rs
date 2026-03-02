@@ -7,8 +7,6 @@ use egui::{self, Color32, RichText};
 
 /// Renders the sidebar containing the observer location input and the list of active satellites.
 pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
-    ui.set_min_width(200.0);
-
     // ── Observer Location ───────────────────────────────────────────────────
     ui.add_space(4.0);
     ui.label(RichText::new("📍 Observer Location").strong());
@@ -187,9 +185,7 @@ pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
         return;
     }
 
-    if !app.filtered_satellites.is_empty() && app.search_query.is_empty() {
-        // No filter active — subtle hint
-    } else if app.filtered_satellites.is_empty() && !app.search_query.is_empty() {
+    if app.filtered_satellites.is_empty() && !app.search_query.is_empty() {
         ui.label(RichText::new("No matches").small().color(Color32::GRAY));
     }
 
@@ -197,7 +193,6 @@ pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
     egui::ScrollArea::vertical()
         .auto_shrink([false; 2])
         .show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
             for name in &filtered {
                 let selected = app.selected_satellite.as_ref() == Some(name);
                 if ui
