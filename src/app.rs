@@ -10,7 +10,6 @@ use crate::satellites::{SpaceObject, fetch_active_satellites};
 
 /// Messages passed from background asynchronous tasks back to the UI thread.
 use walkers::{HttpOptions, HttpTiles, MapMemory, Position};
-
 pub enum AppMessage {
     /// Received a payload containing the successfully parsed Celestrak dataset, or an error.
     SatellitesLoaded(Result<HashMap<String, SpaceObject>, String>),
@@ -20,9 +19,12 @@ pub enum AppMessage {
     PassPredicted(Vec<(chrono::DateTime<chrono::Utc>, f64)>),
 }
 
+/// Supported map tile providers.
 #[derive(PartialEq, Clone, Serialize, Deserialize)]
 pub enum MapStyle {
+    /// Standard OpenStreetMap styled light theme.
     OpenStreetMap,
+    /// Dark-themed CartoDB base map for high contrast satellite tracking.
     CartoDark,
 }
 
@@ -31,16 +33,27 @@ pub enum MapStyle {
 /// Serializable snapshot of user preferences saved across sessions.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct AppSettings {
+    /// String representation of the active `MapStyle`.
     pub map_style: Option<String>,
+    /// Whether the orbital trail should be drawn for the selected satellite.
     pub show_orbital_trail: Option<bool>,
+    /// RGB color payload for the footprint swath polyon [0.0..1.0].
     pub swath_color: Option<[f32; 3]>,
+    /// Alpha opacity for the footprint swath polygon [0.0..1.0].
     pub swath_opacity: Option<f32>,
+    /// Distance in kilometers used to definitively predict if a pass is "overhead".
     pub pass_threshold_km: Option<f64>,
+    /// The currently selected subset of the Celestrak catalog.
     pub satellite_category: Option<crate::satellites::SatelliteCategory>,
+    /// Raw string query used to look up the observer location.
     pub observer_name: Option<String>,
+    /// Geocoded latitude of observer.
     pub observer_lat: Option<f64>,
+    /// Geocoded longitude of observer.
     pub observer_lon: Option<f64>,
+    /// Altitude of the observer (currently unused, defaults to 0).
     pub observer_alt: Option<f64>,
+    /// Current search box query.
     pub location_query: Option<String>,
 }
 
@@ -83,39 +96,66 @@ impl walkers::sources::TileSource for CartoDark {
 /// The core application state running on the `eframe` GUI loop.
 pub struct OrbitSenseApp {
     // Data state
+    /// Active dictionary of all successfully parsed and active satellite objects.
     pub satellites: HashMap<String, SpaceObject>,
+    /// Key (name) of the satellite currently highlighted globally on the map.
     pub selected_satellite: Option<String>,
+    /// Live search query filtering the satellite list.
     pub search_query: String,
+    /// Keys representing the subset of satellites that match the `search_query` string.
     pub filtered_satellites: Vec<String>,
+    /// Active fetch category targeting a Celestrak group (e.g. Visual, Starlink).
     pub satellite_category: crate::satellites::SatelliteCategory,
+    /// Timestamp of the last successful TLE download.
     pub last_updated: Option<chrono::DateTime<chrono::Local>>,
 
     // Observer state
+    /// Geocoded location payload acting as the viewpoint of the user.
     pub observer: Option<Location>,
+    /// Live query used to send searches to the Nominatim geocoder.
     pub location_query: String,
+    /// Array of times and distances when the `selected_satellite` will cross the `observer` location.
     pub last_predicted_passes: Vec<(chrono::DateTime<chrono::Utc>, f64)>,
 
     // UI state
+    /// Toggles the right-side details panel containing SGP4 element readouts.
     pub show_satellite_info: bool,
+    /// Toggles the floating preferences popup modal.
     pub preferences_open: bool,
+    /// Toggles the "About" information window.
     pub show_about: bool,
+    /// Visibility state of the 90-minute projected trail.
     pub show_orbital_trail: bool,
+    /// When true, intercepts map-panning to force the `map_memory` center onto the selected satellite.
     pub camera_locked: bool,
+    /// Upper limit distance in kilometers triggering a successful overhead pass prediction.
     pub pass_threshold_km: f64,
+    /// GUI preference for the [r,g,b] swath color, mapped 0.0 to 1.0.
     pub swath_color: [f32; 3],
+    /// GUI preference for the swath alpha opacity, mapped 0.0 to 1.0.
     pub swath_opacity: f32,
+    /// Pointer to the active `walkers` tile provider logic.
     pub map_style: MapStyle,
+    /// `walkers` internal coordinate memory storing zoom and panning layout.
     pub map_memory: MapMemory,
+    /// Asynchronous `walkers` HTTP worker fetching OpenStreetMap slippy tiles.
     pub tiles_osm: HttpTiles,
+    /// Asynchronous `walkers` HTTP worker fetching CartoDB slippy tiles.
     pub tiles_carto: HttpTiles,
+    /// Handle to the concurrent tokio asynchronous executor.
     pub rt: Handle,
 
     // Async communications
+    /// Channel for the UI thread to send tasks to background threads.
     pub tx: Sender<AppMessage>,
+    /// Receiver checking for completed background data fetches like TLE processing.
     pub rx: Receiver<AppMessage>,
 
+    /// Mutex bool restricting simultaneous HTTP requests for TLE lists.
     pub fetch_in_progress: bool,
+    /// Mutex bool restricting simultaneous HTTP requests for geocoding.
     pub location_in_progress: bool,
+    /// Mutex bool denoting an active brute-force overhead prediction crunch.
     pub is_predicting_pass: bool,
     /// Error from the last satellite TLE download attempt.
     pub error_msg: Option<String>,

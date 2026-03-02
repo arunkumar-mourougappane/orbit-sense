@@ -120,6 +120,8 @@ Preferences and observer location are automatically saved using `eframe`'s built
 - TLE data is sourced from [CelesTrak](https://celestrak.org) and refreshed on every launch.
 - TEME-to-ECEF conversion uses a simplified GMST approximation sufficient for visualization purposes.
 - The swath (view-cone) footprint is derived from the satellite's altitude using Earth's mean radius (6,371 km).
+  - To handle rendering the footprint array accurately when crossing the 2D plane bounds, `orbit-sense` splits and offsets the geometric polygon to seamlessly traverse the `-180`/`+180` longitude anti-meridian gap.
+- **Pass Prediction:** The predictor searches the next 48 hours in variable minute-sized steps. It dynamically adjusts its geometric stride depending on distance from the target to drastically cut the CPU overhead required by SGP4 calculations, allowing instant calculation.
 
 ---
 

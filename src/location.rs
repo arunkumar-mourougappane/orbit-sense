@@ -8,9 +8,13 @@ use sgp4::{Constants, Elements};
 /// Represents a geographic location on Earth (latitude, longitude, altitude).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Location {
+    /// Human-readable identifier for this location (e.g. "Houston, TX").
     pub name: String,
+    /// Geodetic latitude in degrees (North is positive).
     pub lat_deg: f64,
+    /// Geodetic longitude in degrees (East is positive).
     pub lon_deg: f64,
+    /// Altitude above mean sea level in meters.
     pub alt_m: f64,
 }
 
@@ -140,12 +144,14 @@ pub async fn predict_next_pass(
 /// The computed geodetic position of a satellite at a specific time.
 #[derive(Debug, Clone)]
 pub struct Observation {
+    /// Timestamp for when this observation is valid.
     #[allow(dead_code)]
     pub time: DateTime<Utc>,
     /// Sub-satellite latitude — geodetic latitude of the point on Earth directly below the satellite.
     pub sub_lat_deg: f64,
     /// Sub-satellite longitude — geodetic longitude of the point on Earth directly below the satellite.
     pub sub_lon_deg: f64,
+    /// Line-of-sight distance from the coordinate center to the satellite in kilometers.
     #[allow(dead_code)]
     pub range_km: f64,
     /// Altitude above the WGS-84 ellipsoid surface, in kilometres.
