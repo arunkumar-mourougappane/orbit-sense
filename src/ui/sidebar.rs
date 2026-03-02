@@ -149,13 +149,19 @@ pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
         ui.separator();
 
         let filtered = app.filtered_satellites.clone();
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            for name in &filtered {
-                let selected = app.selected_satellite.as_ref() == Some(name);
-                if ui.selectable_label(selected, name).clicked() {
-                    app.set_selected_satellite(Some(name.clone()));
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                for name in &filtered {
+                    let selected = app.selected_satellite.as_ref() == Some(name);
+                    let row_width = ui.available_width();
+                    if ui
+                        .add_sized([row_width, 18.0], egui::Button::selectable(selected, name))
+                        .clicked()
+                    {
+                        app.set_selected_satellite(Some(name.clone()));
+                    }
                 }
-            }
-        });
+            });
     });
 }
