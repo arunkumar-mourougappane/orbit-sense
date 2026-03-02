@@ -57,141 +57,157 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
 
         // ── Observer pin ─────────────────────────────────────────────────────
         if let Some(obs) = self.observer {
-            let pin_pos = projector
-                .project(Position::new(obs.lon_deg, obs.lat_deg))
-                .to_pos2();
-            painter.circle_filled(pin_pos, 6.0, Color32::from_rgb(50, 220, 100));
-            painter.circle_stroke(pin_pos, 7.0, Stroke::new(1.5, Color32::WHITE));
-            painter.text(
-                pin_pos + egui::vec2(9.0, 0.0),
-                egui::Align2::LEFT_CENTER,
-                &obs.name,
-                egui::FontId::proportional(11.0),
-                Color32::from_rgb(50, 220, 100),
-            );
+            for lon_offset in [-360.0_f64, 0.0, 360.0] {
+                let pin_pos = projector
+                    .project(Position::new(obs.lon_deg + lon_offset, obs.lat_deg))
+                    .to_pos2();
+                painter.circle_filled(pin_pos, 6.0, Color32::from_rgb(50, 220, 100));
+                painter.circle_stroke(pin_pos, 7.0, Stroke::new(1.5, Color32::WHITE));
+                painter.text(
+                    pin_pos + egui::vec2(9.0, 0.0),
+                    egui::Align2::LEFT_CENTER,
+                    &obs.name,
+                    egui::FontId::proportional(11.0),
+                    Color32::from_rgb(50, 220, 100),
+                );
+            }
         }
 
         // ── Selected satellite — detailed rendering ──────────────────────────
         if let Some(name) = self.selected_satellite
             && let Some(obs) = self.current_observation
         {
-            let pos = Position::new(obs.sub_lon_deg, obs.sub_lat_deg);
-            let screen_pos = projector.project(pos).to_pos2();
-            let dot_color = altitude_color(obs.altitude_km);
+            for lon_offset in [-360.0_f64, 0.0, 360.0] {
+                let pos = Position::new(obs.sub_lon_deg + lon_offset, obs.sub_lat_deg);
+                let screen_pos = projector.project(pos).to_pos2();
+                let dot_color = altitude_color(obs.altitude_km);
 
-            // Outer highlight ring
-            painter.circle_stroke(screen_pos, 8.0, Stroke::new(2.0, Color32::WHITE));
-            painter.circle_filled(screen_pos, 6.0, dot_color);
+                // Outer highlight ring
+                painter.circle_stroke(screen_pos, 8.0, Stroke::new(2.0, Color32::WHITE));
+                painter.circle_filled(screen_pos, 6.0, dot_color);
 
-            // Name label
-            painter.text(
-                screen_pos + egui::vec2(10.0, 0.0),
-                egui::Align2::LEFT_CENTER,
-                name,
-                egui::FontId::proportional(13.0),
-                Color32::WHITE,
-            );
+                // Name label
+                painter.text(
+                    screen_pos + egui::vec2(10.0, 0.0),
+                    egui::Align2::LEFT_CENTER,
+                    name,
+                    egui::FontId::proportional(13.0),
+                    Color32::WHITE,
+                );
 
-            // ── Orbital footprint (swath) ─────────────────────────────
-            let mut drawn_swath_points = Vec::new();
+                // ── Orbital footprint (swath) ─────────────────────────────
+                let mut drawn_swath_points = Vec::new();
 
-            if let Some((_, _, swath_pos)) = self.cached_swath {
-                for &pos in swath_pos {
-                    drawn_swath_points.push(projector.project(pos).to_pos2());
-                }
-            } else {
-                // Fallback (happens very briefly if cache isn't ready)
-                let r_earth = crate::constants::EARTH_RADIUS_KM;
-                let h = obs.altitude_km.max(0.1);
-
-                if h > 50.0 {
-                    let theta = (r_earth / (r_earth + h)).acos();
-                    let num_points = 72;
-                    drawn_swath_points.reserve(num_points + 1);
-
-                    for i in 0..=num_points {
-                        let angle = (i as f64) * 2.0 * std::f64::consts::PI / (num_points as f64);
-                        let lat_rad = obs.sub_lat_deg.to_radians();
-                        let lon_rad = obs.sub_lon_deg.to_radians();
-
-                        let point_lat = (lat_rad.sin() * theta.cos()
-                            + lat_rad.cos() * theta.sin() * angle.cos())
-                        .asin();
-                        let mut point_lon = lon_rad
-                            + (angle.sin() * theta.sin() * lat_rad.cos())
-                                .atan2(theta.cos() - lat_rad.sin() * point_lat.sin());
-
-                        point_lon = (point_lon + 3.0 * std::f64::consts::PI)
-                            % (2.0 * std::f64::consts::PI)
-                            - std::f64::consts::PI;
-
-                        let p = projector
-                            .project(Position::new(
-                                point_lon.to_degrees(),
-                                point_lat.to_degrees(),
-                            ))
-                            .to_pos2();
-                        drawn_swath_points.push(p);
-                    }
-                }
-            }
-
-            if !drawn_swath_points.is_empty() {
-                let r = (self.swath_color[0] * 255.0) as u8;
-                let g = (self.swath_color[1] * 255.0) as u8;
-                let b = (self.swath_color[2] * 255.0) as u8;
-                let a = (self.swath_opacity * 255.0) as u8;
-                let fill_color = Color32::from_rgba_unmultiplied(r, g, b, a);
-                let border_color = Color32::from_rgba_premultiplied(r, g, b, a.saturating_add(60));
-
-                let half_w = ui.clip_rect().width() / 2.0;
-                let has_antimeridian_crossing = drawn_swath_points
-                    .windows(2)
-                    .any(|w| (w[1].x - w[0].x).abs() > half_w);
-
-                if !has_antimeridian_crossing {
-                    let stroke = Stroke::new(1.0, border_color);
-                    painter.add(egui::Shape::convex_polygon(
-                        drawn_swath_points,
-                        fill_color,
-                        stroke,
-                    ));
-                } else {
-                    let r_earth = crate::constants::EARTH_RADIUS_KM;
-                    let h = obs.altitude_km.max(0.1);
-                    let theta = (r_earth / (r_earth + h)).acos();
-                    let edge_screen = projector
-                        .project(Position::new(
-                            obs.sub_lon_deg + theta.to_degrees(),
-                            obs.sub_lat_deg,
-                        ))
-                        .to_pos2();
-                    let radius = (edge_screen.x - screen_pos.x).abs().max(10.0);
-                    painter.circle(
-                        screen_pos,
-                        radius,
-                        fill_color,
-                        Stroke::new(1.0, border_color),
-                    );
-                }
-            }
-
-            // ── Orbital trail ─────────────────────────────────────────
-            if self.show_orbital_trail
-                && let Some((_, _, trail)) = self.cached_trail
-            {
-                let mut prev_pos: Option<Position> = None;
-
-                for &curr_pos in trail {
-                    if let Some(prev) = prev_pos.filter(|p| (curr_pos.x() - p.x()).abs() < 180.0) {
-                        let p1 = projector.project(prev).to_pos2();
-                        let p2 = projector.project(curr_pos).to_pos2();
-                        painter.line_segment(
-                            [p1, p2],
-                            Stroke::new(1.5, Color32::from_rgba_premultiplied(255, 0, 0, 150)),
+                if let Some((_, _, swath_pos)) = self.cached_swath {
+                    for &pos in swath_pos {
+                        drawn_swath_points.push(
+                            projector
+                                .project(Position::new(pos.x() + lon_offset, pos.y()))
+                                .to_pos2(),
                         );
                     }
-                    prev_pos = Some(curr_pos);
+                } else {
+                    // Fallback (happens very briefly if cache isn't ready)
+                    let r_earth = crate::constants::EARTH_RADIUS_KM;
+                    let h = obs.altitude_km.max(0.1);
+
+                    if h > 50.0 {
+                        let theta = (r_earth / (r_earth + h)).acos();
+                        let num_points = 72;
+                        drawn_swath_points.reserve(num_points + 1);
+
+                        for i in 0..=num_points {
+                            let angle =
+                                (i as f64) * 2.0 * std::f64::consts::PI / (num_points as f64);
+                            let lat_rad = obs.sub_lat_deg.to_radians();
+                            let lon_rad = obs.sub_lon_deg.to_radians();
+
+                            let point_lat = (lat_rad.sin() * theta.cos()
+                                + lat_rad.cos() * theta.sin() * angle.cos())
+                            .asin();
+                            let mut point_lon = lon_rad
+                                + (angle.sin() * theta.sin() * lat_rad.cos())
+                                    .atan2(theta.cos() - lat_rad.sin() * point_lat.sin());
+
+                            point_lon = (point_lon + 3.0 * std::f64::consts::PI)
+                                % (2.0 * std::f64::consts::PI)
+                                - std::f64::consts::PI;
+
+                            let p = projector
+                                .project(Position::new(
+                                    point_lon.to_degrees() + lon_offset,
+                                    point_lat.to_degrees(),
+                                ))
+                                .to_pos2();
+                            drawn_swath_points.push(p);
+                        }
+                    }
+                }
+
+                if !drawn_swath_points.is_empty() {
+                    let r = (self.swath_color[0] * 255.0) as u8;
+                    let g = (self.swath_color[1] * 255.0) as u8;
+                    let b = (self.swath_color[2] * 255.0) as u8;
+                    let a = (self.swath_opacity * 255.0) as u8;
+                    let fill_color = Color32::from_rgba_unmultiplied(r, g, b, a);
+                    let border_color =
+                        Color32::from_rgba_premultiplied(r, g, b, a.saturating_add(60));
+
+                    let half_w = ui.clip_rect().width() / 2.0;
+                    let has_antimeridian_crossing = drawn_swath_points
+                        .windows(2)
+                        .any(|w| (w[1].x - w[0].x).abs() > half_w);
+
+                    if !has_antimeridian_crossing {
+                        let stroke = Stroke::new(1.0, border_color);
+                        painter.add(egui::Shape::convex_polygon(
+                            drawn_swath_points,
+                            fill_color,
+                            stroke,
+                        ));
+                    } else {
+                        let r_earth = crate::constants::EARTH_RADIUS_KM;
+                        let h = obs.altitude_km.max(0.1);
+                        let theta = (r_earth / (r_earth + h)).acos();
+                        let edge_screen = projector
+                            .project(Position::new(
+                                obs.sub_lon_deg + theta.to_degrees() + lon_offset,
+                                obs.sub_lat_deg,
+                            ))
+                            .to_pos2();
+                        let radius = (edge_screen.x - screen_pos.x).abs().max(10.0);
+                        painter.circle(
+                            screen_pos,
+                            radius,
+                            fill_color,
+                            Stroke::new(1.0, border_color),
+                        );
+                    }
+                }
+
+                // ── Orbital trail ─────────────────────────────────────────
+                if self.show_orbital_trail
+                    && let Some((_, _, trail)) = self.cached_trail
+                {
+                    let mut prev_pos: Option<Position> = None;
+
+                    for &curr_pos in trail {
+                        if let Some(prev) =
+                            prev_pos.filter(|p| (curr_pos.x() - p.x()).abs() < 180.0)
+                        {
+                            let p1 = projector
+                                .project(Position::new(prev.x() + lon_offset, prev.y()))
+                                .to_pos2();
+                            let p2 = projector
+                                .project(Position::new(curr_pos.x() + lon_offset, curr_pos.y()))
+                                .to_pos2();
+                            painter.line_segment(
+                                [p1, p2],
+                                Stroke::new(1.5, Color32::from_rgba_premultiplied(255, 0, 0, 150)),
+                            );
+                        }
+                        prev_pos = Some(curr_pos);
+                    }
                 }
             }
         }
