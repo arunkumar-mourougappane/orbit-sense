@@ -1,6 +1,6 @@
 //! Main application state and startup logic for Orbit Sense.
 
-use egui;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::{self, Receiver, Sender};
@@ -20,13 +20,43 @@ pub enum AppMessage {
     PassPredicted(Vec<(chrono::DateTime<chrono::Utc>, f64)>),
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Serialize, Deserialize)]
 pub enum MapStyle {
     OpenStreetMap,
     CartoDark,
 }
 
 // Removed duplicate MapStyle
+
+/// Serializable snapshot of user preferences saved across sessions.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct AppSettings {
+    pub map_style: Option<String>,
+    pub show_orbital_trail: Option<bool>,
+    pub swath_color: Option<[f32; 3]>,
+    pub swath_opacity: Option<f32>,
+    pub pass_threshold_km: Option<f64>,
+    pub satellite_category: Option<crate::satellites::SatelliteCategory>,
+    pub observer_name: Option<String>,
+    pub observer_lat: Option<f64>,
+    pub observer_lon: Option<f64>,
+    pub observer_alt: Option<f64>,
+    pub location_query: Option<String>,
+}
+
+impl AppSettings {
+    const KEY: &'static str = "orbit_sense_settings";
+
+    /// Load settings from eframe's cross-platform storage.
+    pub fn load(storage: &dyn eframe::Storage) -> Self {
+        eframe::get_value(storage, Self::KEY).unwrap_or_default()
+    }
+
+    /// Save settings into eframe's cross-platform storage.
+    pub fn save(&self, storage: &mut dyn eframe::Storage) {
+        eframe::set_value(storage, Self::KEY, self);
+    }
+}
 
 /// Custom tile provider using free CartoDB Voyager endpoints.
 /// See: https://github.com/CartoDB/basemap-styles
@@ -151,15 +181,52 @@ impl OrbitSenseApp {
             error_msg: None,
         };
 
-        // Location recovery bypassed for now since we removed eframe::Storage.
-        // We'll implement Macroquad-native persistence or a simple JSON file in Phase 3.
+        // ------ Restore persisted settings ------
+        if let Some(storage) = cc.storage {
+            let s = AppSettings::load(storage);
 
-        // If no satellites were cached yet, we show the loading spinner immediately.
-        if app.satellites.is_empty() {
-            app.fetch_in_progress = true;
+            if let Some(style) = &s.map_style {
+                app.map_style = match style.as_str() {
+                    "OpenStreetMap" => MapStyle::OpenStreetMap,
+                    _ => MapStyle::CartoDark,
+                };
+            }
+            if let Some(v) = s.show_orbital_trail {
+                app.show_orbital_trail = v;
+            }
+            if let Some(v) = s.swath_color {
+                app.swath_color = v;
+            }
+            if let Some(v) = s.swath_opacity {
+                app.swath_opacity = v;
+            }
+            if let Some(v) = s.pass_threshold_km {
+                app.pass_threshold_km = v;
+            }
+            if let Some(v) = s.satellite_category {
+                app.satellite_category = v;
+            }
+            if let Some(q) = s.location_query {
+                app.location_query = q;
+            }
+
+            if let (Some(name), Some(lat), Some(lon), Some(alt)) = (
+                s.observer_name,
+                s.observer_lat,
+                s.observer_lon,
+                s.observer_alt,
+            ) {
+                app.observer = Some(crate::location::Location {
+                    name,
+                    lat_deg: lat,
+                    lon_deg: lon,
+                    alt_m: alt,
+                });
+            }
         }
 
-        // Silent (or otherwise) background refresh of TLEs so they are current.
+        // Kick off a background refresh of TLEs
+        app.fetch_in_progress = true;
         let tx = app.tx.clone();
         let category = app.satellite_category;
         app.rt.spawn(async move {
@@ -273,7 +340,30 @@ impl eframe::App for OrbitSenseApp {
         crate::ui::render_map_controls(self, ctx);
         crate::ui::render_satellite_info(self, ctx);
         crate::ui::render_preferences_window(self, ctx);
+    }
 
-        crate::ui::render_satellite_info(self, ctx);
+    /// eframe calls this periodically to auto-save application state to disk.
+    /// Storage location is OS-determined by eframe:
+    ///   Linux   → ~/.local/share/<app_name>/
+    ///   macOS   → ~/Library/Application Support/<app_name>/
+    ///   Windows → %APPDATA%\<app_name>\
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        let settings = AppSettings {
+            map_style: Some(match self.map_style {
+                MapStyle::OpenStreetMap => "OpenStreetMap".to_string(),
+                MapStyle::CartoDark => "CartoDark".to_string(),
+            }),
+            show_orbital_trail: Some(self.show_orbital_trail),
+            swath_color: Some(self.swath_color),
+            swath_opacity: Some(self.swath_opacity),
+            pass_threshold_km: Some(self.pass_threshold_km),
+            satellite_category: Some(self.satellite_category),
+            location_query: Some(self.location_query.clone()),
+            observer_name: self.observer.as_ref().map(|o| o.name.clone()),
+            observer_lat: self.observer.as_ref().map(|o| o.lat_deg),
+            observer_lon: self.observer.as_ref().map(|o| o.lon_deg),
+            observer_alt: self.observer.as_ref().map(|o| o.alt_m),
+        };
+        settings.save(storage);
     }
 }

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use sgp4::{Constants, Elements};
 use std::collections::HashMap;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum SatelliteCategory {
     Visual,
     Starlink,
