@@ -5,6 +5,7 @@
 
 use eframe::egui;
 use orbit_sense::app;
+use std::sync::Arc;
 
 /// Starts the `tokio` asynchronous runtime and initializes the `eframe` window.
 #[tokio::main]
@@ -12,10 +13,23 @@ async fn main() -> eframe::Result<()> {
     // Log to stdout (if you run with `RUST_LOG=debug`).
     env_logger::init();
 
+    // Load window icon from compiled assets
+    let icon_bytes = include_bytes!("../../assets/icon.png");
+    let image = image::load_from_memory(icon_bytes)
+        .expect("Failed to load embedded icon")
+        .into_rgba8();
+    let (width, height) = image.dimensions();
+    let icon_data = Arc::new(egui::IconData {
+        rgba: image.into_raw(),
+        width,
+        height,
+    });
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1024.0, 768.0])
-            .with_drag_and_drop(false),
+            .with_drag_and_drop(false)
+            .with_icon(icon_data),
         ..Default::default()
     };
 
