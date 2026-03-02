@@ -7,19 +7,73 @@ use std::collections::HashMap;
 /// Groups of tracked satellites available for download from CelesTrak.
 ///
 /// Each variant corresponds to a named orbital dataset. Selecting a category
-/// triggers a fresh TLE fetch from the matching CelesTrak URL.
+/// triggers a fresh TLE fetch from the matching CelesTrak URL. Categories are
+/// organised into five logical groupings:
+///
+/// - **General** — popular hand-picked sets
+/// - **Government/Science** — weather, GPS, research
+/// - **Commercial Telecom** — established operators (Iridium, Orbcomm, etc.)
+/// - **Broadband Constellations** — high-throughput LEO mega-constellations
+/// - **Earth Observation** — imaging and remote-sensing operators
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum SatelliteCategory {
+    // ── General ─────────────────────────────────────────────────────────────
     /// The 100 visually brightest objects as seen from the ground.
     Visual,
-    /// All operational Starlink broadband constellation satellites.
-    Starlink,
-    /// Satellites primarily used for meteorological observation.
-    Weather,
-    /// Operational GPS navigation satellites (Block II and later).
-    Gps,
-    /// Crewed and uncrewed orbital stations (ISS, CSS, etc.).
+    /// Crewed and uncrewed orbital stations (ISS, CSS, Tiangong, etc.).
     SpaceStations,
+    /// All objects in geostationary / geosynchronous orbits.
+    Geostationary,
+
+    // ── Government / Science ─────────────────────────────────────────────────
+    /// NOAA operational meteorological satellites.
+    Noaa,
+    /// Satellites primarily used for meteorological observation (all agencies).
+    Weather,
+    /// Operational GPS navigation satellites.
+    Gps,
+    /// GLONASS navigation constellation (Russia).
+    Glonass,
+    /// Galileo navigation constellation (EU).
+    Galileo,
+    /// BeiDou navigation constellation (China).
+    Beidou,
+    /// Amateur radio satellites (AMSAT and partners).
+    AmateurRadio,
+    /// CubeSats and nano-satellites.
+    CubeSats,
+    /// Scientific research and exploration missions.
+    Science,
+
+    // ── Commercial Telecom ───────────────────────────────────────────────────
+    /// Iridium voice and data constellation (original + NEXT).
+    IridiumNext,
+    /// Orbcomm machine-to-machine (M2M) data satellites.
+    Orbcomm,
+    /// Globalstar mobile phone and data constellation.
+    Globalstar,
+    /// Intelsat geostationary and flexible-orbit fleet.
+    Intelsat,
+    /// SES GEO and MEO communication satellites.
+    Ses,
+    /// Telesat GEO and LEO satellites.
+    Telesat,
+    /// SES O3b MEO broadband constellation.
+    O3b,
+
+    // ── Broadband Constellations ─────────────────────────────────────────────
+    /// SpaceX Starlink broadband mega-constellation.
+    Starlink,
+    /// OneWeb LEO broadband constellation.
+    OneWeb,
+    /// Amazon Kuiper broadband constellation (where available).
+    Kuiper,
+
+    // ── Earth Observation ────────────────────────────────────────────────────
+    /// Planet Labs Dove and SuperDove imaging cubesats.
+    Planet,
+    /// Spire Global weather, ship-tracking, and aviation analytics satellites.
+    Spire,
 }
 
 impl SatelliteCategory {
@@ -27,14 +81,45 @@ impl SatelliteCategory {
     pub fn to_url(&self) -> &'static str {
         match self {
             Self::Visual => "https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=tle",
-            Self::Starlink => {
-                "https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle"
-            }
-            Self::Weather => "https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle",
-            Self::Gps => "https://celestrak.org/NORAD/elements/gp.php?GROUP=gps-ops&FORMAT=tle",
             Self::SpaceStations => {
                 "https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle"
             }
+            Self::Geostationary => {
+                "https://celestrak.org/NORAD/elements/gp.php?GROUP=geo&FORMAT=tle"
+            }
+            Self::Noaa => "https://celestrak.org/NORAD/elements/gp.php?GROUP=noaa&FORMAT=tle",
+            Self::Weather => "https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle",
+            Self::Gps => "https://celestrak.org/NORAD/elements/gp.php?GROUP=gps-ops&FORMAT=tle",
+            Self::Glonass => "https://celestrak.org/NORAD/elements/gp.php?GROUP=glo-ops&FORMAT=tle",
+            Self::Galileo => "https://celestrak.org/NORAD/elements/gp.php?GROUP=galileo&FORMAT=tle",
+            Self::Beidou => "https://celestrak.org/NORAD/elements/gp.php?GROUP=beidou&FORMAT=tle",
+            Self::AmateurRadio => {
+                "https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=tle"
+            }
+            Self::CubeSats => {
+                "https://celestrak.org/NORAD/elements/gp.php?GROUP=cubesat&FORMAT=tle"
+            }
+            Self::Science => "https://celestrak.org/NORAD/elements/gp.php?GROUP=science&FORMAT=tle",
+            Self::IridiumNext => {
+                "https://celestrak.org/NORAD/elements/gp.php?GROUP=iridium-NEXT&FORMAT=tle"
+            }
+            Self::Orbcomm => "https://celestrak.org/NORAD/elements/gp.php?GROUP=orbcomm&FORMAT=tle",
+            Self::Globalstar => {
+                "https://celestrak.org/NORAD/elements/gp.php?GROUP=globalstar&FORMAT=tle"
+            }
+            Self::Intelsat => {
+                "https://celestrak.org/NORAD/elements/gp.php?GROUP=intelsat&FORMAT=tle"
+            }
+            Self::Ses => "https://celestrak.org/NORAD/elements/gp.php?GROUP=ses&FORMAT=tle",
+            Self::Telesat => "https://celestrak.org/NORAD/elements/gp.php?GROUP=telesat&FORMAT=tle",
+            Self::O3b => "https://celestrak.org/NORAD/elements/gp.php?GROUP=o3b&FORMAT=tle",
+            Self::Starlink => {
+                "https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle"
+            }
+            Self::OneWeb => "https://celestrak.org/NORAD/elements/gp.php?GROUP=oneweb&FORMAT=tle",
+            Self::Kuiper => "https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=tle",
+            Self::Planet => "https://celestrak.org/NORAD/elements/gp.php?GROUP=planet&FORMAT=tle",
+            Self::Spire => "https://celestrak.org/NORAD/elements/gp.php?GROUP=spire&FORMAT=tle",
         }
     }
 
@@ -42,11 +127,91 @@ impl SatelliteCategory {
     pub fn name(&self) -> &'static str {
         match self {
             Self::Visual => "Visual (100 Brightest)",
-            Self::Starlink => "Starlink",
-            Self::Weather => "Weather",
-            Self::Gps => "GPS Operational",
             Self::SpaceStations => "Space Stations",
+            Self::Geostationary => "Geostationary",
+            Self::Noaa => "NOAA",
+            Self::Weather => "Weather",
+            Self::Gps => "GPS",
+            Self::Glonass => "GLONASS",
+            Self::Galileo => "Galileo",
+            Self::Beidou => "BeiDou",
+            Self::AmateurRadio => "Amateur Radio",
+            Self::CubeSats => "CubeSats",
+            Self::Science => "Science",
+            Self::IridiumNext => "Iridium NEXT",
+            Self::Orbcomm => "Orbcomm",
+            Self::Globalstar => "Globalstar",
+            Self::Intelsat => "Intelsat",
+            Self::Ses => "SES",
+            Self::Telesat => "Telesat",
+            Self::O3b => "O3b (SES MEO)",
+            Self::Starlink => "Starlink",
+            Self::OneWeb => "OneWeb",
+            Self::Kuiper => "Amazon Kuiper",
+            Self::Planet => "Planet Labs",
+            Self::Spire => "Spire Global",
         }
+    }
+
+    /// Returns the display-group heading this category belongs to.
+    /// Used to render section separators in the UI dropdown.
+    pub fn group_label(&self) -> &'static str {
+        match self {
+            Self::Visual | Self::SpaceStations | Self::Geostationary => "General",
+            Self::Noaa
+            | Self::Weather
+            | Self::Gps
+            | Self::Glonass
+            | Self::Galileo
+            | Self::Beidou
+            | Self::AmateurRadio
+            | Self::CubeSats
+            | Self::Science => "Government / Science",
+            Self::IridiumNext
+            | Self::Orbcomm
+            | Self::Globalstar
+            | Self::Intelsat
+            | Self::Ses
+            | Self::Telesat
+            | Self::O3b => "Commercial Telecom",
+            Self::Starlink | Self::OneWeb | Self::Kuiper => "Broadband Constellations",
+            Self::Planet | Self::Spire => "Earth Observation",
+        }
+    }
+
+    /// All categories in display order, grouped sequentially.
+    pub fn all() -> &'static [SatelliteCategory] {
+        &[
+            // General
+            Self::Visual,
+            Self::SpaceStations,
+            Self::Geostationary,
+            // Government / Science
+            Self::Noaa,
+            Self::Weather,
+            Self::Gps,
+            Self::Glonass,
+            Self::Galileo,
+            Self::Beidou,
+            Self::AmateurRadio,
+            Self::CubeSats,
+            Self::Science,
+            // Commercial Telecom
+            Self::IridiumNext,
+            Self::Orbcomm,
+            Self::Globalstar,
+            Self::Intelsat,
+            Self::Ses,
+            Self::Telesat,
+            Self::O3b,
+            // Broadband Constellations
+            Self::Starlink,
+            Self::OneWeb,
+            Self::Kuiper,
+            // Earth Observation
+            Self::Planet,
+            Self::Spire,
+        ]
     }
 }
 

@@ -47,55 +47,26 @@ pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
         egui::ComboBox::from_id_salt("satellite_category")
             .selected_text(app.satellite_category.name())
             .show_ui(ui, |ui| {
-                if ui
-                    .selectable_value(
-                        &mut app.satellite_category,
-                        crate::satellites::SatelliteCategory::Visual,
-                        "Visual (100 Brightest)",
-                    )
-                    .clicked()
-                {
-                    category_changed = true;
-                }
-                if ui
-                    .selectable_value(
-                        &mut app.satellite_category,
-                        crate::satellites::SatelliteCategory::Starlink,
-                        "Starlink",
-                    )
-                    .clicked()
-                {
-                    category_changed = true;
-                }
-                if ui
-                    .selectable_value(
-                        &mut app.satellite_category,
-                        crate::satellites::SatelliteCategory::Weather,
-                        "Weather",
-                    )
-                    .clicked()
-                {
-                    category_changed = true;
-                }
-                if ui
-                    .selectable_value(
-                        &mut app.satellite_category,
-                        crate::satellites::SatelliteCategory::Gps,
-                        "GPS Operational",
-                    )
-                    .clicked()
-                {
-                    category_changed = true;
-                }
-                if ui
-                    .selectable_value(
-                        &mut app.satellite_category,
-                        crate::satellites::SatelliteCategory::SpaceStations,
-                        "Space Stations",
-                    )
-                    .clicked()
-                {
-                    category_changed = true;
+                let mut current_group = "";
+                for &cat in crate::satellites::SatelliteCategory::all() {
+                    let group = cat.group_label();
+                    if group != current_group {
+                        if !current_group.is_empty() {
+                            ui.separator();
+                        }
+                        ui.label(
+                            egui::RichText::new(group)
+                                .small()
+                                .color(egui::Color32::from_rgb(150, 180, 220)),
+                        );
+                        current_group = group;
+                    }
+                    if ui
+                        .selectable_value(&mut app.satellite_category, cat, cat.name())
+                        .clicked()
+                    {
+                        category_changed = true;
+                    }
                 }
             });
 
