@@ -198,7 +198,7 @@ fn export_passes_to_ics(sat_name: &str, passes: &[(chrono::DateTime<chrono::Utc>
     if let Some(path) = rfd::FileDialog::new()
         .set_title("Export Passes to Calendar")
         .add_filter("iCalendar", &["ics"])
-        .set_file_name(&format!("{}_passes.ics", sat_name.replace(' ', "_")))
+        .set_file_name(format!("{}_passes.ics", sat_name.replace(' ', "_")))
         .save_file()
     {
         let mut ics_content = String::new();
