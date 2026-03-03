@@ -1,5 +1,6 @@
 //! Fetches satellite TLE data from CelesTrak and parses it into Orbit Sense data structures.
 
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use sgp4::{Constants, Elements};
 use std::collections::HashMap;
@@ -239,6 +240,8 @@ pub struct SpaceObject {
     pub constants: Constants,
     /// The altitude of the satellite in km at the time of fetching, cached for rapid sorting.
     pub cached_altitude: f64,
+    /// The most recently computed geodetic coordinate (lat, lon) for rendering map dots.
+    pub cached_position: Option<(f64, f64)>,
 }
 
 impl SpaceObject {
@@ -261,7 +264,7 @@ impl SpaceObject {
         let constants = Constants::from_elements(&elements).ok()?;
 
         // Calculate altitude once and cache it for instant sorting later
-        let cached_altitude = crate::location::calculate_observation(
+        let cached_observation = crate::location::calculate_observation(
             &elements,
             &constants,
             &crate::location::Location {
@@ -271,15 +274,19 @@ impl SpaceObject {
                 alt_m: 0.0,
             },
             now,
-        )
-        .map(|obs| obs.altitude_km)
-        .unwrap_or(0.0);
+        );
+        let cached_altitude = cached_observation
+            .as_ref()
+            .map(|o| o.altitude_km)
+            .unwrap_or(0.0);
+        let cached_position = cached_observation.map(|o| (o.sub_lat_deg, o.sub_lon_deg));
 
         Some(Self {
             name,
             elements,
             constants,
             cached_altitude,
+            cached_position,
         })
     }
 }
@@ -297,21 +304,24 @@ pub async fn fetch_active_satellites(
     let url = category.to_url();
     let response = reqwest::get(url).await?.text().await?;
 
-    let mut objects = HashMap::new();
     let lines: Vec<&str> = response.lines().collect();
 
     let now = chrono::Utc::now();
-    for chunk in lines.chunks(3) {
-        if chunk.len() == 3 {
-            let name = chunk[0].trim();
-            let line1 = chunk[1];
-            let line2 = chunk[2];
+    let objects: HashMap<String, SpaceObject> = lines
+        .par_chunks(3)
+        .filter_map(|chunk| {
+            if chunk.len() == 3 {
+                let name = chunk[0].trim();
+                let line1 = chunk[1];
+                let line2 = chunk[2];
 
-            if let Some(obj) = SpaceObject::from_tle(name, line1, line2, now) {
-                objects.insert(name.to_string(), obj);
+                if let Some(obj) = SpaceObject::from_tle(name, line1, line2, now) {
+                    return Some((name.to_string(), obj));
+                }
             }
-        }
-    }
+            None
+        })
+        .collect();
 
     Ok(objects)
 }
