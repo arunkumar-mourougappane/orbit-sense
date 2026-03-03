@@ -109,7 +109,7 @@ pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
             if category_changed {
                 app.satellites.clear();
                 app.filtered_satellites.clear();
-                app.selected_satellite = None;
+                app.selected_satellites.clear();
             }
             app.fetch_in_progress = true;
             let tx = app.tx.clone();
@@ -171,6 +171,61 @@ pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
             }
         });
 
+        egui::CollapsingHeader::new("Advanced Filters").show(ui, |ui| {
+            let mut changed = false;
+            ui.label("Altitude (km):");
+            ui.horizontal(|ui| {
+                if ui
+                    .add(
+                        egui::DragValue::new(&mut app.filter_min_alt)
+                            .speed(100.0)
+                            .clamp_range(0.0..=200000.0),
+                    )
+                    .changed()
+                {
+                    changed = true;
+                }
+                ui.label("to");
+                if ui
+                    .add(
+                        egui::DragValue::new(&mut app.filter_max_alt)
+                            .speed(100.0)
+                            .clamp_range(0.0..=200000.0),
+                    )
+                    .changed()
+                {
+                    changed = true;
+                }
+            });
+            ui.label("Inclination (°):");
+            ui.horizontal(|ui| {
+                if ui
+                    .add(
+                        egui::DragValue::new(&mut app.filter_min_inc)
+                            .speed(1.0)
+                            .clamp_range(0.0..=180.0),
+                    )
+                    .changed()
+                {
+                    changed = true;
+                }
+                ui.label("to");
+                if ui
+                    .add(
+                        egui::DragValue::new(&mut app.filter_max_inc)
+                            .speed(1.0)
+                            .clamp_range(0.0..=180.0),
+                    )
+                    .changed()
+                {
+                    changed = true;
+                }
+            });
+            if changed {
+                app.update_filtered_satellites();
+            }
+        });
+
         if app.filtered_satellites.is_empty() && !app.search_query.is_empty() {
             ui.label(
                 egui::RichText::new("No matches")
@@ -186,13 +241,13 @@ pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 for name in &filtered {
-                    let selected = app.selected_satellite.as_ref() == Some(name);
+                    let selected = app.selected_satellites.contains(name);
                     let row_width = ui.available_width();
                     if ui
                         .add_sized([row_width, 18.0], egui::Button::selectable(selected, name))
                         .clicked()
                     {
-                        app.set_selected_satellite(Some(name.clone()));
+                        app.toggle_selected_satellite(name.clone());
                     }
                 }
             });
