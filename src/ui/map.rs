@@ -69,16 +69,16 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
                     let dot_color = altitude_color(sat.cached_altitude);
                     painter.circle_filled(screen_pos, 2.5, dot_color);
 
-                    if let Some(hp) = hover_pos {
-                        if (screen_pos - hp).length() < 6.0 {
-                            painter.text(
-                                screen_pos + egui::vec2(8.0, 0.0),
-                                egui::Align2::LEFT_CENTER,
-                                name,
-                                egui::FontId::proportional(12.0),
-                                Color32::WHITE,
-                            );
-                        }
+                    if let Some(hp) = hover_pos
+                        && (screen_pos - hp).length() < 6.0
+                    {
+                        painter.text(
+                            screen_pos + egui::vec2(8.0, 0.0),
+                            egui::Align2::LEFT_CENTER,
+                            name,
+                            egui::FontId::proportional(12.0),
+                            Color32::WHITE,
+                        );
                     }
                 }
             }
@@ -171,30 +171,27 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
                 }
 
                 // ── Orbital trail ─────────────────────────────────────────
-                if self.show_orbital_trail {
-                    if let Some((_, trail)) = self.cached_trails.get(name) {
-                        let mut prev_pos: Option<Position> = None;
+                if self.show_orbital_trail
+                    && let Some((_, trail)) = self.cached_trails.get(name)
+                {
+                    let mut prev_pos: Option<Position> = None;
 
-                        for &curr_pos in trail {
-                            if let Some(prev) =
-                                prev_pos.filter(|p| (curr_pos.x() - p.x()).abs() < 180.0)
-                            {
-                                let p1 = projector
-                                    .project(Position::new(prev.x(), prev.y()))
-                                    .to_pos2();
-                                let p2 = projector
-                                    .project(Position::new(curr_pos.x(), curr_pos.y()))
-                                    .to_pos2();
-                                painter.line_segment(
-                                    [p1, p2],
-                                    Stroke::new(
-                                        1.5,
-                                        Color32::from_rgba_premultiplied(255, 0, 0, 150),
-                                    ),
-                                );
-                            }
-                            prev_pos = Some(curr_pos);
+                    for &curr_pos in trail {
+                        if let Some(prev) =
+                            prev_pos.filter(|p| (curr_pos.x() - p.x()).abs() < 180.0)
+                        {
+                            let p1 = projector
+                                .project(Position::new(prev.x(), prev.y()))
+                                .to_pos2();
+                            let p2 = projector
+                                .project(Position::new(curr_pos.x(), curr_pos.y()))
+                                .to_pos2();
+                            painter.line_segment(
+                                [p1, p2],
+                                Stroke::new(1.5, Color32::from_rgba_premultiplied(255, 0, 0, 150)),
+                            );
                         }
+                        prev_pos = Some(curr_pos);
                     }
                 }
             }
@@ -210,13 +207,12 @@ pub fn render_map(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
     }
 
     // Camera lock: follow the selected satellite
-    if app.camera_locked {
-        if let Some(first_name) = app.selected_satellites.iter().next() {
-            if let Some(obs) = app.current_observations.get(first_name) {
-                app.map_memory
-                    .center_at(Position::new(obs.sub_lon_deg, obs.sub_lat_deg));
-            }
-        }
+    if app.camera_locked
+        && let Some(first_name) = app.selected_satellites.iter().next()
+        && let Some(obs) = app.current_observations.get(first_name)
+    {
+        app.map_memory
+            .center_at(Position::new(obs.sub_lon_deg, obs.sub_lat_deg));
     }
 
     if app.show_orbital_trail {
@@ -256,12 +252,11 @@ pub fn render_map(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
     for name in &app.selected_satellites {
         if let Some(obs) = app.current_observations.get(name) {
             let mut needs_swath_update = true;
-            if let Some((c_lat, c_lon, _)) = app.cached_swaths.get(name) {
-                if (obs.sub_lat_deg - *c_lat).abs() < 0.05
-                    && (obs.sub_lon_deg - *c_lon).abs() < 0.05
-                {
-                    needs_swath_update = false;
-                }
+            if let Some((c_lat, c_lon, _)) = app.cached_swaths.get(name)
+                && (obs.sub_lat_deg - *c_lat).abs() < 0.05
+                && (obs.sub_lon_deg - *c_lon).abs() < 0.05
+            {
+                needs_swath_update = false;
             }
 
             if needs_swath_update {

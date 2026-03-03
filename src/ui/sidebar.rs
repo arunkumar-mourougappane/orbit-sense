@@ -179,7 +179,7 @@ pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
                     .add(
                         egui::DragValue::new(&mut app.filter_min_alt)
                             .speed(100.0)
-                            .clamp_range(0.0..=200000.0),
+                            .range(0.0..=200000.0),
                     )
                     .changed()
                 {
@@ -190,7 +190,7 @@ pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
                     .add(
                         egui::DragValue::new(&mut app.filter_max_alt)
                             .speed(100.0)
-                            .clamp_range(0.0..=200000.0),
+                            .range(0.0..=200000.0),
                     )
                     .changed()
                 {
@@ -203,7 +203,7 @@ pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
                     .add(
                         egui::DragValue::new(&mut app.filter_min_inc)
                             .speed(1.0)
-                            .clamp_range(0.0..=180.0),
+                            .range(0.0..=180.0),
                     )
                     .changed()
                 {
@@ -214,7 +214,7 @@ pub fn render_sidebar(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
                     .add(
                         egui::DragValue::new(&mut app.filter_max_inc)
                             .speed(1.0)
-                            .clamp_range(0.0..=180.0),
+                            .range(0.0..=180.0),
                     )
                     .changed()
                 {

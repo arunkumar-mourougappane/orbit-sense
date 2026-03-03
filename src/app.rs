@@ -465,8 +465,8 @@ impl eframe::App for OrbitSenseApp {
         // Calculate single Observation payload per-frame instead of letting UI functions duplicate it
         self.current_observations.clear();
         for name in &self.selected_satellites {
-            if let Some(sat) = self.satellites.get(name) {
-                if let Some(obs) = crate::location::calculate_observation(
+            if let Some(sat) = self.satellites.get(name)
+                && let Some(obs) = crate::location::calculate_observation(
                     &sat.elements,
                     &sat.constants,
                     &crate::location::Location {
@@ -476,9 +476,9 @@ impl eframe::App for OrbitSenseApp {
                         alt_m: 0.0,
                     },
                     now_utc,
-                ) {
-                    self.current_observations.insert(name.clone(), obs);
-                }
+                )
+            {
+                self.current_observations.insert(name.clone(), obs);
             }
         }
 
