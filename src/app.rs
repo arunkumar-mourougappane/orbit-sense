@@ -56,6 +56,14 @@ pub struct AppSettings {
     pub observer_alt: Option<f64>,
     /// Current search box query.
     pub location_query: Option<String>,
+    /// Minimum altitude filter in km.
+    pub filter_min_alt: Option<f64>,
+    /// Maximum altitude filter in km.
+    pub filter_max_alt: Option<f64>,
+    /// Minimum inclination filter in degrees.
+    pub filter_min_inc: Option<f64>,
+    /// Maximum inclination filter in degrees.
+    pub filter_max_inc: Option<f64>,
 }
 
 impl AppSettings {
@@ -99,8 +107,8 @@ pub struct OrbitSenseApp {
     // Data state
     /// Active dictionary of all successfully parsed and active satellite objects.
     pub satellites: HashMap<String, SpaceObject>,
-    /// Key (name) of the satellite currently highlighted globally on the map.
-    pub selected_satellite: Option<String>,
+    /// HashSet of Keys (names) of the satellites currently highlighted globally on the map.
+    pub selected_satellites: std::collections::HashSet<String>,
     /// Live search query filtering the satellite list.
     pub search_query: String,
     /// Keys representing the subset of satellites that match the `search_query` string.
@@ -166,14 +174,26 @@ pub struct OrbitSenseApp {
     pub sort_alpha: bool,
     /// Set to true for one frame to move keyboard focus to the filter box.
     pub focus_filter: bool,
-    /// Caches the heavy SGP4 math for the selected satellite's orbital trail. (time, name, trail)
-    pub cached_trail: Option<(
-        chrono::DateTime<chrono::Utc>,
-        String,
-        Vec<walkers::Position>,
-    )>,
-    /// Per-frame calculation of the selected satellite's exact position to feed `map.rs` and `overlay.rs`.
-    pub current_observation: Option<Observation>,
+    /// Minimum altitude in km for the sidebar filter.
+    pub filter_min_alt: f64,
+    /// Maximum altitude in km for the sidebar filter.
+    pub filter_max_alt: f64,
+    /// Minimum inclination in degrees for the sidebar filter.
+    pub filter_min_inc: f64,
+    /// Maximum inclination in degrees for the sidebar filter.
+    pub filter_max_inc: f64,
+    /// Simulated time offset from real UTC now, in seconds.
+    pub time_offset_seconds: f64,
+    /// Speed multiplier for orbital playback. 1.0 = real-time, 0.0 = paused.
+    pub playback_speed_multiplier: f64,
+    /// Caches the heavy SGP4 math for the selected satellites' orbital trails. (time, trail)
+    pub cached_trails: HashMap<String, (chrono::DateTime<chrono::Utc>, Vec<walkers::Position>)>,
+    /// Cache the swath polygon points to avoid heavy trig per-frame. (lat, lon, points)
+    pub cached_swaths: HashMap<String, (f64, f64, Vec<walkers::Position>)>,
+    /// Per-frame calculation of the selected satellites' exact positions.
+    pub current_observations: HashMap<String, Observation>,
+    /// Timestamp of the last global position recalculation.
+    pub last_position_update: chrono::DateTime<chrono::Utc>,
 }
 
 impl OrbitSenseApp {
@@ -183,7 +203,11 @@ impl OrbitSenseApp {
         let (tx, rx) = mpsc::channel(100);
 
         // Setup walkers tiles manager
+        let cache_dir = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
+            .join(".local/share/orbit-sense/tiles");
+
         let options = HttpOptions {
+            cache: Some(cache_dir.clone()),
             user_agent: Some(reqwest::header::HeaderValue::from_static(
                 "orbit-sense/0.1 (amouroug@gemini.local)",
             )),
@@ -191,6 +215,7 @@ impl OrbitSenseApp {
         };
 
         let options2 = HttpOptions {
+            cache: Some(cache_dir),
             user_agent: Some(reqwest::header::HeaderValue::from_static(
                 "orbit-sense/0.1 (amouroug@gemini.local)",
             )),
@@ -210,7 +235,7 @@ impl OrbitSenseApp {
 
         let mut app = Self {
             satellites: HashMap::new(),
-            selected_satellite: None,
+            selected_satellites: std::collections::HashSet::new(),
             search_query: String::new(),
             filtered_satellites: Vec::new(),
             satellite_category: crate::satellites::SatelliteCategory::Visual,
@@ -240,8 +265,16 @@ impl OrbitSenseApp {
             location_error_msg: None,
             sort_alpha: true,
             focus_filter: false,
-            cached_trail: None,
-            current_observation: None,
+            filter_min_alt: 0.0,
+            filter_max_alt: 200000.0,
+            filter_min_inc: 0.0,
+            filter_max_inc: 180.0,
+            time_offset_seconds: 0.0,
+            playback_speed_multiplier: 1.0,
+            cached_trails: HashMap::new(),
+            cached_swaths: HashMap::new(),
+            current_observations: HashMap::new(),
+            last_position_update: chrono::Utc::now(),
         };
 
         // ------ Restore persisted settings ------
@@ -272,6 +305,18 @@ impl OrbitSenseApp {
             if let Some(q) = s.location_query {
                 app.location_query = q;
             }
+            if let Some(v) = s.filter_min_alt {
+                app.filter_min_alt = v;
+            }
+            if let Some(v) = s.filter_max_alt {
+                app.filter_max_alt = v;
+            }
+            if let Some(v) = s.filter_min_inc {
+                app.filter_min_inc = v;
+            }
+            if let Some(v) = s.filter_max_inc {
+                app.filter_max_inc = v;
+            }
 
             if let (Some(name), Some(lat), Some(lon), Some(alt)) = (
                 s.observer_name,
@@ -301,12 +346,22 @@ impl OrbitSenseApp {
 
         app
     }
-    /// Update the currently focused satellite and trigger an asynchronous `trigger_pass_prediction()` calculation.
-    pub fn set_selected_satellite(&mut self, name: Option<String>) {
-        if self.selected_satellite != name {
-            self.cached_trail = None; // Invalidate cache on change
+
+    /// Returns the currently simulated time.
+    pub fn current_time(&self) -> chrono::DateTime<chrono::Utc> {
+        chrono::Utc::now() + chrono::Duration::seconds(self.time_offset_seconds as i64)
+    }
+
+    /// Toggle a satellite selection.
+    pub fn toggle_selected_satellite(&mut self, name: String) {
+        if self.selected_satellites.contains(&name) {
+            self.selected_satellites.remove(&name);
+            self.cached_trails.remove(&name);
+            self.cached_swaths.remove(&name);
+            self.current_observations.remove(&name);
+        } else {
+            self.selected_satellites.insert(name);
         }
-        self.selected_satellite = name;
         self.trigger_pass_prediction();
     }
 
@@ -315,9 +370,15 @@ impl OrbitSenseApp {
         let query = self.search_query.to_lowercase();
         let mut keys: Vec<String> = self
             .satellites
-            .keys()
-            .filter(|k| k.to_lowercase().contains(&query))
-            .cloned()
+            .iter()
+            .filter(|(k, sat)| {
+                k.to_lowercase().contains(&query)
+                    && sat.cached_altitude >= self.filter_min_alt
+                    && sat.cached_altitude <= self.filter_max_alt
+                    && sat.elements.inclination >= self.filter_min_inc
+                    && sat.elements.inclination <= self.filter_max_inc
+            })
+            .map(|(k, _)| k.clone())
             .collect();
 
         if self.sort_alpha {
@@ -348,16 +409,15 @@ impl OrbitSenseApp {
 
     /// Spawns a background `tokio` thread to predict the next overhead pass using `location::predict_next_pass`.
     pub fn trigger_pass_prediction(&mut self) {
-        if self.observer.is_none() || self.selected_satellite.is_none() {
+        if self.observer.is_none() || self.selected_satellites.is_empty() {
             self.last_predicted_passes.clear();
             return;
         }
         self.is_predicting_pass = true;
         let tx = self.tx.clone();
-        let sat = self
-            .satellites
-            .get(self.selected_satellite.as_ref().unwrap())
-            .cloned();
+
+        let first_selected = self.selected_satellites.iter().next().unwrap().clone();
+        let sat = self.satellites.get(&first_selected).cloned();
         let obs = self.observer.clone().unwrap();
         let threshold = self.pass_threshold_km;
 
@@ -372,33 +432,55 @@ impl OrbitSenseApp {
 
 impl eframe::App for OrbitSenseApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let dt = ctx.input(|i| i.stable_dt) as f64;
+        self.time_offset_seconds += (self.playback_speed_multiplier - 1.0) * dt;
+
+        let now_utc = self.current_time();
+        if (now_utc - self.last_position_update).num_seconds() >= 1 {
+            use rayon::prelude::*;
+            let loc = crate::location::Location {
+                name: String::new(),
+                lat_deg: 0.0,
+                lon_deg: 0.0,
+                alt_m: 0.0,
+            };
+            self.satellites.par_iter_mut().for_each(|(_, sat)| {
+                if let Some(obs) = crate::location::calculate_observation(
+                    &sat.elements,
+                    &sat.constants,
+                    &loc,
+                    now_utc,
+                ) {
+                    sat.cached_position = Some((obs.sub_lat_deg, obs.sub_lon_deg));
+                }
+            });
+            self.last_position_update = now_utc;
+        }
+
         // --- Global Keyboard Shortcuts ---
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            self.selected_satellite = None;
+            self.selected_satellites.clear();
         }
 
         // Calculate single Observation payload per-frame instead of letting UI functions duplicate it
-        self.current_observation = {
-            if let Some(name) = &self.selected_satellite {
-                if let Some(sat) = self.satellites.get(name) {
-                    crate::location::calculate_observation(
-                        &sat.elements,
-                        &sat.constants,
-                        &crate::location::Location {
-                            name: String::new(),
-                            lat_deg: 0.0,
-                            lon_deg: 0.0,
-                            alt_m: 0.0,
-                        },
-                        chrono::Utc::now(),
-                    )
-                } else {
-                    None
+        self.current_observations.clear();
+        for name in &self.selected_satellites {
+            if let Some(sat) = self.satellites.get(name) {
+                if let Some(obs) = crate::location::calculate_observation(
+                    &sat.elements,
+                    &sat.constants,
+                    &crate::location::Location {
+                        name: String::new(),
+                        lat_deg: 0.0,
+                        lon_deg: 0.0,
+                        alt_m: 0.0,
+                    },
+                    now_utc,
+                ) {
+                    self.current_observations.insert(name.clone(), obs);
                 }
-            } else {
-                None
             }
-        };
+        }
 
         if ctx.input(|i| i.key_pressed(egui::Key::R)) && !self.fetch_in_progress {
             self.fetch_in_progress = true;
@@ -479,8 +561,8 @@ impl eframe::App for OrbitSenseApp {
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new(
-                        chrono::Utc::now()
-                            .format("%Y-%m-%d %H:%M:%S UTC")
+                        self.current_time()
+                            .format("%Y-%m-%d %H:%M:%S Sim")
                             .to_string(),
                     )
                     .monospace()
@@ -524,6 +606,7 @@ impl eframe::App for OrbitSenseApp {
 
         crate::ui::render_map_controls(self, ctx);
         crate::ui::render_satellite_info(self, ctx);
+        crate::ui::overlay::render_time_controls(self, ctx);
         crate::ui::render_preferences_window(self, ctx);
         crate::ui::about::render_about_window(self, ctx);
     }
@@ -549,6 +632,10 @@ impl eframe::App for OrbitSenseApp {
             observer_lat: self.observer.as_ref().map(|o| o.lat_deg),
             observer_lon: self.observer.as_ref().map(|o| o.lon_deg),
             observer_alt: self.observer.as_ref().map(|o| o.alt_m),
+            filter_min_alt: Some(self.filter_min_alt),
+            filter_max_alt: Some(self.filter_max_alt),
+            filter_min_inc: Some(self.filter_min_inc),
+            filter_max_inc: Some(self.filter_max_inc),
         };
         settings.save(storage);
     }
