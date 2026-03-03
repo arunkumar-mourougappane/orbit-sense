@@ -99,7 +99,7 @@ pub fn render_satellite_info(app: &mut OrbitSenseApp, ctx: &egui::Context) {
         return;
     }
 
-    let sat_name = match &app.selected_satellite {
+    let sat_name = match app.selected_satellites.iter().next() {
         Some(name) => name,
         None => return,
     };
@@ -111,14 +111,24 @@ pub fn render_satellite_info(app: &mut OrbitSenseApp, ctx: &egui::Context) {
 
     let mut open = app.show_satellite_info;
 
-    egui::Window::new(format!("ℹ {}", sat_name))
+    let window_title = if app.selected_satellites.len() > 1 {
+        format!(
+            "ℹ {} (+{} others)",
+            sat_name,
+            app.selected_satellites.len() - 1
+        )
+    } else {
+        format!("ℹ {}", sat_name)
+    };
+
+    egui::Window::new(window_title)
         .open(&mut open)
         .resizable(false)
         .collapsible(false)
         .show(ctx, |ui| {
             ui.heading("Spacecraft Details");
 
-            if let Some(obs) = &app.current_observation {
+            if let Some(obs) = app.current_observations.get(sat_name) {
                 ui.label(format!("Altitude:      {:.1} km", obs.altitude_km));
                 ui.label(format!("Velocity:      {:.2} km/s", obs.velocity_km_s));
                 ui.label(format!("Latitude (sub-sat):  {:.4}°", obs.sub_lat_deg));
@@ -160,6 +170,10 @@ pub fn render_satellite_info(app: &mut OrbitSenseApp, ctx: &egui::Context) {
                             ui.separator();
                         }
                     });
+                    ui.add_space(8.0);
+                    if ui.button("📅 Export to Calendar (.ics)").clicked() {
+                        export_passes_to_ics(sat_name, &app.last_predicted_passes);
+                    }
                 } else if app.is_predicting_pass {
                     ui.horizontal(|ui| {
                         ui.spinner();
@@ -177,4 +191,95 @@ pub fn render_satellite_info(app: &mut OrbitSenseApp, ctx: &egui::Context) {
     if open {
         ctx.request_repaint_after(std::time::Duration::from_millis(33));
     }
+}
+
+/// Generates an iCalendar (.ics) string for the given passes and prompts the user to save it.
+fn export_passes_to_ics(sat_name: &str, passes: &[(chrono::DateTime<chrono::Utc>, f64)]) {
+    if let Some(path) = rfd::FileDialog::new()
+        .set_title("Export Passes to Calendar")
+        .add_filter("iCalendar", &["ics"])
+        .set_file_name(&format!("{}_passes.ics", sat_name.replace(' ', "_")))
+        .save_file()
+    {
+        let mut ics_content = String::new();
+        ics_content.push_str("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Orbit Sense//EN\r\n");
+
+        let now = chrono::Utc::now().format("%Y%m%dT%H%M%SZ");
+        for (i, (time, dist)) in passes.iter().enumerate() {
+            let start = time.format("%Y%m%dT%H%M%SZ");
+            let end = (*time + chrono::Duration::minutes(10)).format("%Y%m%dT%H%M%SZ");
+            let uid = format!("{}-{}@orbitsense", time.timestamp(), i);
+
+            ics_content.push_str("BEGIN:VEVENT\r\n");
+            ics_content.push_str(&format!("UID:{}\r\n", uid));
+            ics_content.push_str(&format!("DTSTAMP:{}\r\n", now));
+            ics_content.push_str(&format!("DTSTART:{}\r\n", start));
+            ics_content.push_str(&format!("DTEND:{}\r\n", end));
+            ics_content.push_str(&format!("SUMMARY:{} Pass\r\n", sat_name));
+            ics_content.push_str(&format!(
+                "DESCRIPTION:Predicted overhead pass for {} (Distance: {:.0} km).\r\n",
+                sat_name, dist
+            ));
+            ics_content.push_str("END:VEVENT\r\n");
+        }
+
+        ics_content.push_str("END:VCALENDAR\r\n");
+        let _ = std::fs::write(path, ics_content);
+    }
+}
+
+/// Renders the floating time controls panel for Orbital Playback.
+pub fn render_time_controls(app: &mut OrbitSenseApp, ctx: &egui::Context) {
+    let frame = egui::Frame::window(&ctx.style())
+        .inner_margin(6.0)
+        .fill(egui::Color32::from_black_alpha(200));
+
+    egui::Window::new("Time Controls")
+        .frame(frame)
+        .collapsible(false)
+        .resizable(false)
+        .title_bar(false)
+        .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -40.0))
+        .show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                if ui.button("⏪ -60x").clicked() {
+                    app.playback_speed_multiplier = -60.0;
+                }
+                if ui.button("⏪ -10x").clicked() {
+                    app.playback_speed_multiplier = -10.0;
+                }
+
+                let is_paused = app.playback_speed_multiplier == 0.0;
+                let play_pause_icon = if is_paused { "▶ Play" } else { "⏸ Pause" };
+                if ui.button(play_pause_icon).clicked() {
+                    if is_paused {
+                        app.playback_speed_multiplier = 1.0;
+                    } else {
+                        app.playback_speed_multiplier = 0.0;
+                    }
+                }
+
+                if ui.button("⏩ 10x").clicked() {
+                    app.playback_speed_multiplier = 10.0;
+                }
+                if ui.button("⏩ 60x").clicked() {
+                    app.playback_speed_multiplier = 60.0;
+                }
+
+                ui.separator();
+
+                if ui.button("Reset Time").clicked() {
+                    app.time_offset_seconds = 0.0;
+                    app.playback_speed_multiplier = 1.0;
+                }
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Speed:");
+                ui.add(
+                    egui::Slider::new(&mut app.playback_speed_multiplier, -3600.0..=3600.0)
+                        .text("x"),
+                );
+            });
+        });
 }
