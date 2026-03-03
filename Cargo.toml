@@ -1,6 +1,6 @@
 [package]
 name = "orbit-sense"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 authors = ["Arunkumar Mourougappane <amouroug.dev@gmail.com>"]
 description = "A real-time satellite tracking application with 2D map visualization, orbital pass prediction, and live telemetry."
