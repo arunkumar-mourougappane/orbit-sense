@@ -42,10 +42,10 @@ fn draw_graticule(painter: &egui::Painter, projector: &walkers::Projector, clip_
         while lon < 180.0 {
             let pos = projector.project(Position::new(lon, lat)).to_pos2();
             if clip_rect.contains(pos) {
-                if let Some(prev) = prev_pos {
-                    if (pos.x - prev.x).abs() < 200.0 {
-                        painter.line_segment([prev, pos], Stroke::new(0.5, grid_color));
-                    }
+                if let Some(prev) = prev_pos
+                    && (pos.x - prev.x).abs() < 200.0
+                {
+                    painter.line_segment([prev, pos], Stroke::new(0.5, grid_color));
                 }
                 prev_pos = Some(pos);
             }
@@ -144,10 +144,10 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
         let hover_pos = response.hover_pos();
 
         // Draw graticule
-        draw_graticule(&painter, projector, clip_rect);
+        draw_graticule(painter, projector, clip_rect);
 
         // Draw terminator line
-        draw_terminator(&painter, projector, clip_rect, chrono::Utc::now());
+        draw_terminator(painter, projector, clip_rect, chrono::Utc::now());
 
         // ── Global satellites ──────────────────────────────────────────────
         for (name, sat) in self.satellites {
