@@ -27,6 +27,14 @@ pub enum MapStyle {
     OpenStreetMap,
     /// Dark-themed CartoDB base map for high contrast satellite tracking.
     CartoDark,
+    /// CartoDB Positron — clean, minimal light theme.
+    CartoPositron,
+    /// Stamen Terrain — shows topography and elevation.
+    StamenTerrain,
+    /// Esri World Imagery — satellite/aerial view.
+    EsriImagery,
+    /// OpenTopoMap — topographic with contour lines.
+    OpenTopoMap,
 }
 
 // Removed duplicate MapStyle
@@ -80,7 +88,7 @@ impl AppSettings {
     }
 }
 
-/// Custom tile provider using free CartoDB Voyager endpoints.
+/// Custom tile provider using free CartoDB Dark endpoints.
 /// See: <https://github.com/CartoDB/basemap-styles>
 pub struct CartoDark;
 
@@ -96,6 +104,86 @@ impl walkers::sources::TileSource for CartoDark {
         walkers::sources::Attribution {
             text: "© OpenStreetMap contributors © CARTO",
             url: "https://carto.com/attributions",
+            logo_light: None,
+            logo_dark: None,
+        }
+    }
+}
+
+pub struct CartoPositron;
+
+impl walkers::sources::TileSource for CartoPositron {
+    fn tile_url(&self, tile_id: walkers::TileId) -> String {
+        format!(
+            "https://basemaps.cartocdn.com/rastertiles/light_all/{}/{}/{}.png",
+            tile_id.zoom, tile_id.x, tile_id.y
+        )
+    }
+
+    fn attribution(&self) -> walkers::sources::Attribution {
+        walkers::sources::Attribution {
+            text: "© OpenStreetMap contributors © CARTO",
+            url: "https://carto.com/attributions",
+            logo_light: None,
+            logo_dark: None,
+        }
+    }
+}
+
+pub struct StamenTerrain;
+
+impl walkers::sources::TileSource for StamenTerrain {
+    fn tile_url(&self, tile_id: walkers::TileId) -> String {
+        format!(
+            "https://tile.openstreetmap.de/tiles/osmde/{}/{}/{}.png",
+            tile_id.zoom, tile_id.x, tile_id.y
+        )
+    }
+
+    fn attribution(&self) -> walkers::sources::Attribution {
+        walkers::sources::Attribution {
+            text: "© OpenStreetMap contributors",
+            url: "https://www.openstreetmap.org/copyright",
+            logo_light: None,
+            logo_dark: None,
+        }
+    }
+}
+
+pub struct EsriImagery;
+
+impl walkers::sources::TileSource for EsriImagery {
+    fn tile_url(&self, tile_id: walkers::TileId) -> String {
+        format!(
+            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{}/{}/{}",
+            tile_id.zoom, tile_id.y, tile_id.x
+        )
+    }
+
+    fn attribution(&self) -> walkers::sources::Attribution {
+        walkers::sources::Attribution {
+            text: "© Esri, DigitalGlobe, Earthstar Geographics",
+            url: "https://www.esri.com",
+            logo_light: None,
+            logo_dark: None,
+        }
+    }
+}
+
+pub struct OpenTopoMap;
+
+impl walkers::sources::TileSource for OpenTopoMap {
+    fn tile_url(&self, tile_id: walkers::TileId) -> String {
+        format!(
+            "https://a.tile.opentopomap.org/{}/{}/{}.png",
+            tile_id.zoom, tile_id.x, tile_id.y
+        )
+    }
+
+    fn attribution(&self) -> walkers::sources::Attribution {
+        walkers::sources::Attribution {
+            text: "© OpenStreetMap contributors, SRTM",
+            url: "https://opentopomap.org",
             logo_light: None,
             logo_dark: None,
         }
@@ -149,8 +237,16 @@ pub struct OrbitSenseApp {
     pub map_memory: MapMemory,
     /// Asynchronous `walkers` HTTP worker fetching OpenStreetMap slippy tiles.
     pub tiles_osm: HttpTiles,
-    /// Asynchronous `walkers` HTTP worker fetching CartoDB slippy tiles.
+    /// Asynchronous `walkers` HTTP worker fetching CartoDB Dark slippy tiles.
     pub tiles_carto: HttpTiles,
+    /// Asynchronous `walkers` HTTP worker fetching CartoDB Positron slippy tiles.
+    pub tiles_positron: HttpTiles,
+    /// Asynchronous `walkers` HTTP worker fetching Stamen Terrain slippy tiles.
+    pub tiles_terrain: HttpTiles,
+    /// Asynchronous `walkers` HTTP worker fetching Esri World Imagery slippy tiles.
+    pub tiles_esri: HttpTiles,
+    /// Asynchronous `walkers` HTTP worker fetching OpenTopoMap slippy tiles.
+    pub tiles_topo: HttpTiles,
     /// Handle to the concurrent tokio asynchronous executor.
     pub rt: Handle,
 
@@ -206,16 +302,8 @@ impl OrbitSenseApp {
         let cache_dir = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
             .join(".local/share/orbit-sense/tiles");
 
-        let options = HttpOptions {
+        let make_options = || HttpOptions {
             cache: Some(cache_dir.clone()),
-            user_agent: Some(reqwest::header::HeaderValue::from_static(
-                "orbit-sense/0.1 (amouroug@gemini.local)",
-            )),
-            ..Default::default()
-        };
-
-        let options2 = HttpOptions {
-            cache: Some(cache_dir),
             user_agent: Some(reqwest::header::HeaderValue::from_static(
                 "orbit-sense/0.1 (amouroug@gemini.local)",
             )),
@@ -224,10 +312,14 @@ impl OrbitSenseApp {
 
         let tiles_osm = HttpTiles::with_options(
             walkers::sources::OpenStreetMap,
-            options,
+            make_options(),
             cc.egui_ctx.clone(),
         );
-        let tiles_carto = HttpTiles::with_options(CartoDark, options2, cc.egui_ctx.clone());
+        let tiles_carto = HttpTiles::with_options(CartoDark, make_options(), cc.egui_ctx.clone());
+        let tiles_positron = HttpTiles::with_options(CartoPositron, make_options(), cc.egui_ctx.clone());
+        let tiles_terrain = HttpTiles::with_options(StamenTerrain, make_options(), cc.egui_ctx.clone());
+        let tiles_esri = HttpTiles::with_options(EsriImagery, make_options(), cc.egui_ctx.clone());
+        let tiles_topo = HttpTiles::with_options(OpenTopoMap, make_options(), cc.egui_ctx.clone());
 
         let mut initial_map_memory = MapMemory::default();
         initial_map_memory.center_at(Position::new(0.0, 20.0));
@@ -255,6 +347,10 @@ impl OrbitSenseApp {
             map_memory: initial_map_memory,
             tiles_osm,
             tiles_carto,
+            tiles_positron,
+            tiles_terrain,
+            tiles_esri,
+            tiles_topo,
             rt: Handle::current(),
             tx,
             rx,
@@ -284,6 +380,10 @@ impl OrbitSenseApp {
             if let Some(style) = &s.map_style {
                 app.map_style = match style.as_str() {
                     "OpenStreetMap" => MapStyle::OpenStreetMap,
+                    "CartoPositron" => MapStyle::CartoPositron,
+                    "StamenTerrain" => MapStyle::StamenTerrain,
+                    "EsriImagery" => MapStyle::EsriImagery,
+                    "OpenTopoMap" => MapStyle::OpenTopoMap,
                     _ => MapStyle::CartoDark,
                 };
             }
@@ -621,6 +721,10 @@ impl eframe::App for OrbitSenseApp {
             map_style: Some(match self.map_style {
                 MapStyle::OpenStreetMap => "OpenStreetMap".to_string(),
                 MapStyle::CartoDark => "CartoDark".to_string(),
+                MapStyle::CartoPositron => "CartoPositron".to_string(),
+                MapStyle::StamenTerrain => "StamenTerrain".to_string(),
+                MapStyle::EsriImagery => "EsriImagery".to_string(),
+                MapStyle::OpenTopoMap => "OpenTopoMap".to_string(),
             }),
             show_orbital_trail: Some(self.show_orbital_trail),
             swath_color: Some(self.swath_color),

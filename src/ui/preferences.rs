@@ -25,6 +25,10 @@ pub fn render_preferences_window(app: &mut OrbitSenseApp, ctx: &egui::Context) {
                     .selected_text(match app.map_style {
                         crate::app::MapStyle::OpenStreetMap => "Light (OSM)",
                         crate::app::MapStyle::CartoDark => "Dark (CartoDB)",
+                        crate::app::MapStyle::CartoPositron => "Positron (CartoDB)",
+                        crate::app::MapStyle::StamenTerrain => "Terrain (Stamen)",
+                        crate::app::MapStyle::EsriImagery => "Satellite (Esri)",
+                        crate::app::MapStyle::OpenTopoMap => "Topographic (OpenTopo)",
                     })
                     .show_ui(ui, |ui| {
                         ui.selectable_value(
@@ -36,6 +40,26 @@ pub fn render_preferences_window(app: &mut OrbitSenseApp, ctx: &egui::Context) {
                             &mut app.map_style,
                             crate::app::MapStyle::CartoDark,
                             "Dark (CartoDB)",
+                        );
+                        ui.selectable_value(
+                            &mut app.map_style,
+                            crate::app::MapStyle::CartoPositron,
+                            "Positron (CartoDB)",
+                        );
+                        ui.selectable_value(
+                            &mut app.map_style,
+                            crate::app::MapStyle::StamenTerrain,
+                            "Terrain (Stamen)",
+                        );
+                        ui.selectable_value(
+                            &mut app.map_style,
+                            crate::app::MapStyle::EsriImagery,
+                            "Satellite (Esri)",
+                        );
+                        ui.selectable_value(
+                            &mut app.map_style,
+                            crate::app::MapStyle::OpenTopoMap,
+                            "Topographic (OpenTopo)",
                         );
                     });
             });
