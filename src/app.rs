@@ -110,6 +110,7 @@ impl walkers::sources::TileSource for CartoDark {
     }
 }
 
+/// Custom tile provider using CartoDB Positron light theme endpoints.
 pub struct CartoPositron;
 
 impl walkers::sources::TileSource for CartoPositron {
@@ -130,6 +131,7 @@ impl walkers::sources::TileSource for CartoPositron {
     }
 }
 
+/// Custom tile provider using OpenStreetMap DE tiles showing topographic elevation.
 pub struct StamenTerrain;
 
 impl walkers::sources::TileSource for StamenTerrain {
@@ -150,6 +152,7 @@ impl walkers::sources::TileSource for StamenTerrain {
     }
 }
 
+/// Custom tile provider using Esri World Imagery satellite/aerial view.
 pub struct EsriImagery;
 
 impl walkers::sources::TileSource for EsriImagery {
@@ -170,6 +173,7 @@ impl walkers::sources::TileSource for EsriImagery {
     }
 }
 
+/// Custom tile provider using OpenTopoMap detailed terrain with contour lines.
 pub struct OpenTopoMap;
 
 impl walkers::sources::TileSource for OpenTopoMap {
@@ -316,8 +320,10 @@ impl OrbitSenseApp {
             cc.egui_ctx.clone(),
         );
         let tiles_carto = HttpTiles::with_options(CartoDark, make_options(), cc.egui_ctx.clone());
-        let tiles_positron = HttpTiles::with_options(CartoPositron, make_options(), cc.egui_ctx.clone());
-        let tiles_terrain = HttpTiles::with_options(StamenTerrain, make_options(), cc.egui_ctx.clone());
+        let tiles_positron =
+            HttpTiles::with_options(CartoPositron, make_options(), cc.egui_ctx.clone());
+        let tiles_terrain =
+            HttpTiles::with_options(StamenTerrain, make_options(), cc.egui_ctx.clone());
         let tiles_esri = HttpTiles::with_options(EsriImagery, make_options(), cc.egui_ctx.clone());
         let tiles_topo = HttpTiles::with_options(OpenTopoMap, make_options(), cc.egui_ctx.clone());
 
