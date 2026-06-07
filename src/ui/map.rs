@@ -8,14 +8,103 @@ use walkers::{Map, Position};
 
 // ── Altitude colour helpers ──────────────────────────────────────────────────
 
-/// Returns a colour representing the satellite's orbital regime based on altitude.
+/// Returns a vibrant colour representing the satellite's orbital regime based on altitude.
 fn altitude_color(altitude_km: f64) -> Color32 {
     if altitude_km < 2_000.0 {
-        Color32::from_rgb(80, 160, 255) // LEO — blue
+        Color32::from_rgb(100, 200, 255) // LEO — bright blue
     } else if altitude_km < 35_000.0 {
-        Color32::from_rgb(255, 165, 0) // MEO — orange
+        Color32::from_rgb(255, 220, 0) // MEO — bright yellow
     } else {
-        Color32::from_rgb(255, 80, 80) // GEO — red
+        Color32::from_rgb(255, 80, 120) // GEO — hot pink
+    }
+}
+
+/// Returns the size in pixels for a satellite dot based on altitude.
+fn satellite_size(altitude_km: f64) -> f32 {
+    if altitude_km < 2_000.0 {
+        3.0 // LEO
+    } else if altitude_km < 35_000.0 {
+        4.0 // MEO
+    } else {
+        5.0 // GEO
+    }
+}
+
+/// Draws a lat/lon graticule on the map.
+fn draw_graticule(painter: &egui::Painter, projector: &walkers::Projector, clip_rect: egui::Rect) {
+    let grid_step = 15.0;
+    let grid_color = Color32::from_rgba_unmultiplied(100, 100, 100, 50);
+
+    let mut lat = -90.0;
+    while lat <= 90.0 {
+        let mut prev_pos: Option<egui::Pos2> = None;
+        let mut lon = -180.0;
+        while lon < 180.0 {
+            let pos = projector.project(Position::new(lon, lat)).to_pos2();
+            if clip_rect.contains(pos) {
+                if let Some(prev) = prev_pos {
+                    if (pos.x - prev.x).abs() < 200.0 {
+                        painter.line_segment([prev, pos], Stroke::new(0.5, grid_color));
+                    }
+                }
+                prev_pos = Some(pos);
+            }
+            lon += 2.0;
+        }
+        lat += grid_step;
+    }
+
+    let mut lon = -180;
+    while lon <= 180 {
+        let mut prev_pos: Option<egui::Pos2> = None;
+        let mut lat = -90.0;
+        while lat <= 90.0 {
+            let pos = projector.project(Position::new(lon as f64, lat)).to_pos2();
+            if clip_rect.contains(pos) {
+                if let Some(prev) = prev_pos {
+                    painter.line_segment([prev, pos], Stroke::new(0.5, grid_color));
+                }
+                prev_pos = Some(pos);
+            }
+            lat += 2.0;
+        }
+        lon += grid_step as i32;
+    }
+}
+
+/// Draws the day/night terminator line on the map.
+fn draw_terminator(
+    painter: &egui::Painter,
+    projector: &walkers::Projector,
+    clip_rect: egui::Rect,
+    current_time: chrono::DateTime<chrono::Utc>,
+) {
+    let jd = current_time.timestamp() as f64 / 86400.0 + 2440587.5;
+    let t = (jd - 2451545.0) / 36525.0;
+    let gmst = (280.46061837 + 360.98564736629 * (jd - 2451545.0) + t * t * 0.000387933
+        - t * t * t / 38710000.0)
+        % 360.0;
+    let subsolar_lon = (gmst - 180.0) % 360.0;
+
+    let mut terminator_points = Vec::new();
+    let mut lat = -90.0;
+    while lat <= 90.0 {
+        let lon = subsolar_lon + 90.0;
+        let lon = if lon > 180.0 { lon - 360.0 } else { lon };
+        let pos = projector.project(Position::new(lon, lat)).to_pos2();
+        if clip_rect.contains(pos) {
+            terminator_points.push(pos);
+        }
+        lat += 2.0;
+    }
+
+    if terminator_points.len() > 1 {
+        for window in terminator_points.windows(2) {
+            painter.line_segment(
+                [window[0], window[1]],
+                Stroke::new(1.5, Color32::from_rgba_unmultiplied(255, 140, 0, 120)),
+            );
+        }
     }
 }
 
@@ -54,6 +143,12 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
 
         let hover_pos = response.hover_pos();
 
+        // Draw graticule
+        draw_graticule(&painter, projector, clip_rect);
+
+        // Draw terminator line
+        draw_terminator(&painter, projector, clip_rect, chrono::Utc::now());
+
         // ── Global satellites ──────────────────────────────────────────────
         for (name, sat) in self.satellites {
             if self.selected_satellites.contains(name) {
@@ -67,13 +162,27 @@ impl walkers::Plugin for SatellitesPlugin<'_> {
                 // Frustum culling
                 if clip_rect.contains(screen_pos) {
                     let dot_color = altitude_color(sat.cached_altitude);
-                    painter.circle_filled(screen_pos, 2.5, dot_color);
+                    let dot_size = satellite_size(sat.cached_altitude);
+
+                    // Glow halo effect
+                    painter.circle_filled(
+                        screen_pos,
+                        dot_size + 3.0,
+                        Color32::from_rgba_unmultiplied(
+                            dot_color.r(),
+                            dot_color.g(),
+                            dot_color.b(),
+                            40,
+                        ),
+                    );
+
+                    painter.circle_filled(screen_pos, dot_size, dot_color);
 
                     if let Some(hp) = hover_pos
-                        && (screen_pos - hp).length() < 6.0
+                        && (screen_pos - hp).length() < (dot_size + 6.0)
                     {
                         painter.text(
-                            screen_pos + egui::vec2(8.0, 0.0),
+                            screen_pos + egui::vec2(dot_size + 6.0, 0.0),
                             egui::Align2::LEFT_CENTER,
                             name,
                             egui::FontId::proportional(12.0),
@@ -301,6 +410,10 @@ pub fn render_map(app: &mut OrbitSenseApp, ui: &mut egui::Ui) {
     let tiles = match app.map_style {
         crate::app::MapStyle::OpenStreetMap => &mut app.tiles_osm,
         crate::app::MapStyle::CartoDark => &mut app.tiles_carto,
+        crate::app::MapStyle::CartoPositron => &mut app.tiles_positron,
+        crate::app::MapStyle::StamenTerrain => &mut app.tiles_terrain,
+        crate::app::MapStyle::EsriImagery => &mut app.tiles_esri,
+        crate::app::MapStyle::OpenTopoMap => &mut app.tiles_topo,
     };
 
     let map = Map::new(Some(tiles), &mut app.map_memory, Position::new(0.0, 0.0)).with_plugin(
